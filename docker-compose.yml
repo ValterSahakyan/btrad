@@ -37,6 +37,8 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/perpscout
       REDIS_URL: redis://redis:6379
       FRONTEND_URL: https://yogurtsoftware.info
+    ports:
+      - "127.0.0.1:13000:3000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -61,31 +63,15 @@ services:
     environment:
       NODE_ENV: production
       NEXT_PUBLIC_API_BASE_URL: https://api.yogurtsoftware.info/api
-      # Server-side Next.js calls go directly to the backend container (skips Caddy/TLS)
       API_BASE_URL: http://backend:3000/api
       NEXT_PUBLIC_AUTH_REQUIRED: "true"
+    ports:
+      - "127.0.0.1:13001:3001"
     depends_on:
       backend:
         condition: service_healthy
     restart: unless-stopped
 
-  caddy:
-    image: caddy:2-alpine
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
-    depends_on:
-      - frontend
-      - backend
-    restart: unless-stopped
-
 volumes:
   postgres-data:
   redis-data:
-  caddy-data:
-  caddy-config:
