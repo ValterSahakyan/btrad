@@ -36,21 +36,26 @@ export class TradesService {
   }
 
   async closeLive(id: string) {
-    const trade = await this.prisma.trade.findUnique({ where: { id } });
+    const trade = await this.prisma.trade.findUnique({ where: { id }, include: { orders: true } });
     if (!trade) throw new NotFoundException('Trade not found');
     if (trade.status !== 'live_open') throw new NotFoundException('Trade is not open');
 
-    // Cancel any open SL/TP orders on Binance before placing the close order.
-    // This prevents orphaned stop orders from re-opening the position after close.
-    await this.binanceService.cancelAllOpenOrders(trade.symbol).catch(async (err) => {
-      await this.logsService.warn('trades', 'Failed to cancel open orders before close', {
-        tradeId: id,
-        symbol: trade.symbol,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    });
+    // Cancel only the SL/TP orders that belong to THIS trade.
+    // Never use cancelAllOpenOrders — that would wipe orders from other trades on the same symbol.
+    const openOrders = trade.orders.filter((o) => o.status === 'open' && o.binanceOrderId);
+    for (const order of openOrders) {
+      await this.binanceService
+        .cancelOrder(trade.symbol, order.binanceOrderId!)
+        .catch(async (err) => {
+          await this.logsService.warn('trades', `Failed to cancel order ${order.binanceOrderId}`, {
+            tradeId: id,
+            symbol: trade.symbol,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
+    }
 
-    // Mark any DB orders for this trade as cancelled
+    // Mark those orders as cancelled in DB
     await this.prisma.order.updateMany({
       where: { tradeId: id, status: 'open' },
       data: { status: 'cancelled' },
@@ -68,7 +73,7 @@ export class TradesService {
       clientOrderId: `${id.slice(0, 8)}-close-${ts}`,
     });
 
-    // Use the actual fill price from Binance; fall back to mark price if missing
+    // Use actual fill price from Binance; fall back to mark price only if avgPrice is missing
     const fillPrice = Number(closeResult.avgPrice);
     const exitPrice = fillPrice > 0 ? fillPrice : await this.binanceService.fetchMarkPrice(trade.symbol);
 

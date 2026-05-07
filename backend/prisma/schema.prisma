@@ -156,6 +156,7 @@ model Signal {
   @@index([status])
   @@index([createdAt])
   @@index([symbolId])
+  @@index([expiresAt])
 }
 
 model Trade {
@@ -180,6 +181,7 @@ model Trade {
   @@index([status])
   @@index([createdAt])
   @@index([signalId])
+  @@index([symbol])
 }
 
 model Order {

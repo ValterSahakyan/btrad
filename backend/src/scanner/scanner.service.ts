@@ -182,9 +182,9 @@ export class ScannerService {
         });
         if (existingTrade) continue;
 
-        // Skip if already have an active signal for this symbol
+        // Skip if already have a pending or active signal for this symbol
         const existingSignal = await this.prisma.signal.findFirst({
-          where: { symbolId: symbolRecord.id, status: 'active' },
+          where: { symbolId: symbolRecord.id, status: { in: ['pending', 'active'] } },
         });
         if (existingSignal) continue;
 

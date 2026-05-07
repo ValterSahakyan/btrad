@@ -27,7 +27,9 @@
       "Bash(findstr \"LISTENING\")",
       "Bash(taskkill /PID 20260 /F)",
       "PowerShell(Stop-Process -Id 20260 -Force)",
-      "PowerShell($pids = \\(Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue\\).OwningProcess | Select-Object -Unique; if \\($pids\\) { $pids | ForEach-Object { $p = Get-Process -Id $_ -ErrorAction SilentlyContinue; Write-Host \"PID $_ \\($\\($p.Name\\)\\)\"; Stop-Process -Id $_ -Force } } else { Write-Host \"No process found on port 3000\" })"
+      "PowerShell($pids = \\(Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue\\).OwningProcess | Select-Object -Unique; if \\($pids\\) { $pids | ForEach-Object { $p = Get-Process -Id $_ -ErrorAction SilentlyContinue; Write-Host \"PID $_ \\($\\($p.Name\\)\\)\"; Stop-Process -Id $_ -Force } } else { Write-Host \"No process found on port 3000\" })",
+      "Bash(npm --workspace backend run prisma:migrate -- --name add_indexes)",
+      "PowerShell($pids = \\(Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue\\).OwningProcess | Select-Object -Unique; if \\($pids\\) { $pids | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue; Write-Host \"Killed PID $_\" } } else { Write-Host \"Port 3000 free\" })"
     ]
   }
 }

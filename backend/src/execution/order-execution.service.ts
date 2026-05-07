@@ -22,11 +22,32 @@ export class OrderExecutionService {
       include: { symbol: true },
     });
     if (!signal) throw new NotFoundException('Signal not found');
+
+    // Idempotency guard — prevent double-execution from rapid approvals
+    if (signal.status === 'live_executed') {
+      throw new BadRequestException('Signal has already been executed');
+    }
     if (signal.expiresAt < new Date()) throw new BadRequestException('Signal has expired');
 
     const settings = await this.prisma.botSettings.findFirst();
     if (!settings?.realTradingEnabled) throw new BadRequestException('Real trading is not enabled in settings');
     if (settings.mode !== 'live') throw new BadRequestException('Bot must be in live mode to place live orders');
+
+    // Re-validate open trade count at execution time (could have changed since signal was created)
+    const openTrades = await this.prisma.trade.count({
+      where: { status: { in: ['paper_open', 'live_open'] } },
+    });
+    if (openTrades >= (settings.maxOpenTrades ?? 2)) {
+      throw new BadRequestException(`Max open trades limit reached (${settings.maxOpenTrades})`);
+    }
+
+    // Also block if another live trade already exists for this symbol
+    const existingTrade = await this.prisma.trade.findFirst({
+      where: { symbol: signal.symbol.symbol, status: 'live_open' },
+    });
+    if (existingTrade) {
+      throw new BadRequestException(`A live trade for ${signal.symbol.symbol} is already open`);
+    }
 
     const sym = signal.symbol;
     const stepSize = sym.stepSize;
@@ -38,10 +59,10 @@ export class OrderExecutionService {
       throw new BadRequestException(`Position size below Binance minimum notional ($${sym.minNotional})`);
     }
 
-    // Validate available balance covers the required margin
+    // Validate available balance covers the required margin (with 0.5% fee buffer)
     const balanceRows = await this.binanceService.fetchAccountBalance();
     const availableBalance = Number(balanceRows.find((row) => row.asset === 'USDT')?.availableBalance ?? 0);
-    const requiredMargin = (quantity * signal.entryPrice) / signal.leverage;
+    const requiredMargin = ((quantity * signal.entryPrice) / signal.leverage) * 1.005;
     if (availableBalance < requiredMargin) {
       throw new BadRequestException(
         `Insufficient USDT balance: need $${requiredMargin.toFixed(2)}, have $${availableBalance.toFixed(2)}`,
@@ -54,6 +75,8 @@ export class OrderExecutionService {
     const closeSide = signal.direction === 'LONG' ? 'SELL' : 'BUY';
     const ts = Date.now();
     const idPrefix = signalId.slice(0, 8);
+    // Add short random suffix to prevent clientOrderId collision on same-millisecond approvals
+    const rand = Math.random().toString(36).slice(2, 5);
 
     // Entry MARKET order
     const entryResult = await this.binanceService.placeOrder({
@@ -61,7 +84,7 @@ export class OrderExecutionService {
       side,
       type: 'MARKET',
       quantity,
-      clientOrderId: `${idPrefix}-e-${ts}`,
+      clientOrderId: `${idPrefix}-e-${ts}-${rand}`,
     });
 
     const trade = await this.prisma.trade.create({
@@ -101,10 +124,14 @@ export class OrderExecutionService {
         quantity,
         stopPrice: Number(signal.stopLoss.toFixed(sym.pricePrecision)),
         reduceOnly: true,
-        clientOrderId: `${idPrefix}-sl-${ts}`,
+        clientOrderId: `${idPrefix}-sl-${ts}-${rand}`,
       })
       .catch(async (err) => {
-        await this.logsService.error('execution', 'SL order failed', { error: err.message, signalId });
+        await this.logsService.error('execution', 'SL order failed — position has no stop loss', {
+          error: err.message,
+          signalId,
+          tradeId: trade.id,
+        });
         return null;
       });
 
@@ -133,10 +160,14 @@ export class OrderExecutionService {
         quantity,
         stopPrice: Number(signal.takeProfit1.toFixed(sym.pricePrecision)),
         reduceOnly: true,
-        clientOrderId: `${idPrefix}-tp-${ts}`,
+        clientOrderId: `${idPrefix}-tp-${ts}-${rand}`,
       })
       .catch(async (err) => {
-        await this.logsService.error('execution', 'TP order failed', { error: err.message, signalId });
+        await this.logsService.error('execution', 'TP order failed', {
+          error: err.message,
+          signalId,
+          tradeId: trade.id,
+        });
         return null;
       });
 

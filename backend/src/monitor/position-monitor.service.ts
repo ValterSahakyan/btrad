@@ -33,12 +33,8 @@ export class PositionMonitorService {
         const sl = trade.signal?.stopLoss ?? null;
         const tp = trade.signal?.takeProfit1 ?? null;
 
-        const hitSL = sl !== null && (
-          trade.direction === 'LONG' ? markPrice <= sl : markPrice >= sl
-        );
-        const hitTP = tp !== null && (
-          trade.direction === 'LONG' ? markPrice >= tp : markPrice <= tp
-        );
+        const hitSL = sl !== null && (trade.direction === 'LONG' ? markPrice <= sl : markPrice >= sl);
+        const hitTP = tp !== null && (trade.direction === 'LONG' ? markPrice >= tp : markPrice <= tp);
 
         if (hitSL) {
           await this.paperTradingService.closeTrade(trade.id, sl!);
@@ -77,7 +73,6 @@ export class PositionMonitorService {
         if (activeSymbols.has(trade.symbol)) continue; // still open on exchange
 
         // Position is gone — closed by SL/TP or external action.
-        // Fetch actual realized PnL from Binance income history for accurate accounting.
         try {
           const openedAtMs = trade.openedAt ? trade.openedAt.getTime() : trade.createdAt.getTime();
           const realizedPnl = await this.binanceService
@@ -89,11 +84,9 @@ export class PositionMonitorService {
 
           if (realizedPnl !== null) {
             pnl = realizedPnl;
-            // Derive approximate exit price from realized PnL for display purposes
             const dirMult = trade.direction === 'LONG' ? 1 : -1;
-            exitPrice = trade.entryPrice + (pnl / (trade.quantity * dirMult));
+            exitPrice = trade.entryPrice + pnl / (trade.quantity * dirMult);
           } else {
-            // Fall back to mark price if income API fails
             exitPrice = await this.binanceService.fetchMarkPrice(trade.symbol);
             const dirMult = trade.direction === 'LONG' ? 1 : -1;
             pnl = (exitPrice - trade.entryPrice) * trade.quantity * dirMult;
@@ -102,8 +95,10 @@ export class PositionMonitorService {
           const pnlPercent = trade.margin === 0 ? 0 : (pnl / trade.margin) * 100;
           const status = pnl >= 0 ? 'take_profit' : 'stopped';
 
-          await this.prisma.trade.update({
-            where: { id: trade.id },
+          // Use updateMany with status guard to prevent race condition with manual close.
+          // If another process already closed this trade, count will be 0 and we skip.
+          const updated = await this.prisma.trade.updateMany({
+            where: { id: trade.id, status: 'live_open' },
             data: {
               exitPrice: Number(exitPrice.toFixed(8)),
               pnl: Number(pnl.toFixed(4)),
@@ -113,7 +108,12 @@ export class PositionMonitorService {
             },
           });
 
-          // Mark open SL/TP orders as filled/cancelled since position is gone
+          if (updated.count === 0) {
+            // Trade was already closed by manual action — skip
+            continue;
+          }
+
+          // Mark open SL/TP orders as settled
           await this.prisma.order.updateMany({
             where: { tradeId: trade.id, status: 'open' },
             data: { status: pnl >= 0 ? 'filled' : 'triggered' },

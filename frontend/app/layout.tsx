@@ -1,6 +1,15 @@
+import type { Metadata } from 'next';
 import './globals.css';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
+
+export const metadata: Metadata = {
+  title: 'PerpScout AI — Futures Console',
+  description: 'Algorithmic futures trading dashboard',
+  icons: {
+    icon: '/icon.svg',
+  },
+};
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
