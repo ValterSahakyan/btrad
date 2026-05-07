@@ -1,9 +1,9 @@
 import { DataTable } from '@/components/dashboard/data-table';
-import { fetchApi } from '@/services/api';
+import { fetchApiSafe } from '@/services/api';
 import { number } from '@/lib/utils';
 
 export default async function HotCoinsPage() {
-  const hotCoins = await fetchApi<any[]>('/hot-coins');
+  const hotCoins = await fetchApiSafe<any[]>('/hot-coins', []);
 
   return (
     <DataTable

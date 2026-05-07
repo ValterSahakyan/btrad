@@ -19,6 +19,8 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
 COPY package.json package-lock.json ./
 COPY backend/package.json backend/package.json
 COPY frontend/package.json frontend/package.json
@@ -29,4 +31,9 @@ EXPOSE 3000
 
 WORKDIR /app/backend
 
-CMD ["sh", "-c", "npx prisma db push && node dist/main.js"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+  CMD wget -qO- http://localhost:3000/health || exit 1
+
+USER appuser
+
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]

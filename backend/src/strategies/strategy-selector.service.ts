@@ -14,19 +14,19 @@ export class StrategySelectorService {
   ) {}
 
   evaluate(context: StrategyContext): StrategySignalCandidate | null {
-    const strategies = [
+    const candidates: StrategySignalCandidate[] = [];
+
+    for (const strategy of [
       this.breakoutVolumeStrategy,
       this.pullbackContinuationStrategy,
       this.exhaustionReversalStrategy,
-    ].filter((strategy) => strategy.enabled);
-
-    for (const strategy of strategies) {
+    ]) {
       const signal = strategy.evaluate(context);
-      if (signal) {
-        return signal;
-      }
+      if (signal) candidates.push(signal);
     }
 
-    return null;
+    if (candidates.length === 0) return null;
+
+    return candidates.reduce((best, c) => (c.strategyScore > best.strategyScore ? c : best));
   }
 }

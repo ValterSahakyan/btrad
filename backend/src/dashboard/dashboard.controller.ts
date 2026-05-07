@@ -78,6 +78,32 @@ export class DashboardController {
         minRiskReward: body.minRiskReward as number | undefined,
         scannerIntervalSeconds: body.scannerIntervalSeconds as number | undefined,
         signalExpirationMinutes: body.signalExpirationMinutes as number | undefined,
+        maxSymbolsPerScan: body.maxSymbolsPerScan as number | undefined,
+        minHotScoreForScan: body.minHotScoreForScan as number | undefined,
+        // Breakout + Volume
+        breakoutEnabled: body.breakoutEnabled as boolean | undefined,
+        breakoutMinVolumeRatio: body.breakoutMinVolumeRatio as number | undefined,
+        breakoutLookbackPeriod: body.breakoutLookbackPeriod as number | undefined,
+        breakoutMaxSlPercent: body.breakoutMaxSlPercent as number | undefined,
+        breakoutTp1Multiplier: body.breakoutTp1Multiplier as number | undefined,
+        breakoutTp2Multiplier: body.breakoutTp2Multiplier as number | undefined,
+        breakoutMinHotScore: body.breakoutMinHotScore as number | undefined,
+        // Trend Pullback
+        pullbackEnabled: body.pullbackEnabled as boolean | undefined,
+        pullbackRsiLongMin: body.pullbackRsiLongMin as number | undefined,
+        pullbackRsiLongMax: body.pullbackRsiLongMax as number | undefined,
+        pullbackRsiShortMin: body.pullbackRsiShortMin as number | undefined,
+        pullbackRsiShortMax: body.pullbackRsiShortMax as number | undefined,
+        pullbackAtrMultiplier: body.pullbackAtrMultiplier as number | undefined,
+        pullbackMaxSlPercent: body.pullbackMaxSlPercent as number | undefined,
+        pullbackMinHotScore: body.pullbackMinHotScore as number | undefined,
+        // Mean Reversion
+        reversionEnabled: body.reversionEnabled as boolean | undefined,
+        reversionRsiOverbought: body.reversionRsiOverbought as number | undefined,
+        reversionRsiOversold: body.reversionRsiOversold as number | undefined,
+        reversionVwapDeviationPct: body.reversionVwapDeviationPct as number | undefined,
+        reversionVolumeDeclineRatio: body.reversionVolumeDeclineRatio as number | undefined,
+        reversionMaxSlPercent: body.reversionMaxSlPercent as number | undefined,
       },
     });
   }

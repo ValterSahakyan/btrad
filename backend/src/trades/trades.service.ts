@@ -1,12 +1,17 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { Prisma } from '@prisma/client';
+import { BinanceService } from '../binance/binance.service';
+import { LogsService } from '../logs/logs.service';
 import { PaperTradingService } from '../paper-trading/paper-trading.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class TradesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly paperTradingService: PaperTradingService,
+    private readonly binanceService: BinanceService,
+    private readonly logsService: LogsService,
   ) {}
 
   async list() {
@@ -22,9 +27,7 @@ export class TradesService {
       where: { id },
       include: { signal: true, orders: true },
     });
-    if (!trade) {
-      throw new NotFoundException('Trade not found');
-    }
+    if (!trade) throw new NotFoundException('Trade not found');
     return trade;
   }
 
@@ -32,7 +35,79 @@ export class TradesService {
     return this.paperTradingService.closeTrade(id);
   }
 
-  async closeLive(_id: string) {
-    return { success: false, message: 'Live close flow is not enabled in the MVP' };
+  async closeLive(id: string) {
+    const trade = await this.prisma.trade.findUnique({ where: { id } });
+    if (!trade) throw new NotFoundException('Trade not found');
+    if (trade.status !== 'live_open') throw new NotFoundException('Trade is not open');
+
+    // Cancel any open SL/TP orders on Binance before placing the close order.
+    // This prevents orphaned stop orders from re-opening the position after close.
+    await this.binanceService.cancelAllOpenOrders(trade.symbol).catch(async (err) => {
+      await this.logsService.warn('trades', 'Failed to cancel open orders before close', {
+        tradeId: id,
+        symbol: trade.symbol,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+
+    // Mark any DB orders for this trade as cancelled
+    await this.prisma.order.updateMany({
+      where: { tradeId: id, status: 'open' },
+      data: { status: 'cancelled' },
+    });
+
+    const side = trade.direction === 'LONG' ? 'SELL' : 'BUY';
+    const ts = Date.now();
+
+    const closeResult = await this.binanceService.placeOrder({
+      symbol: trade.symbol,
+      side,
+      type: 'MARKET',
+      quantity: trade.quantity,
+      reduceOnly: true,
+      clientOrderId: `${id.slice(0, 8)}-close-${ts}`,
+    });
+
+    // Use the actual fill price from Binance; fall back to mark price if missing
+    const fillPrice = Number(closeResult.avgPrice);
+    const exitPrice = fillPrice > 0 ? fillPrice : await this.binanceService.fetchMarkPrice(trade.symbol);
+
+    const dirMult = trade.direction === 'LONG' ? 1 : -1;
+    const pnl = (exitPrice - trade.entryPrice) * trade.quantity * dirMult;
+    const pnlPercent = trade.margin === 0 ? 0 : (pnl / trade.margin) * 100;
+
+    const updated = await this.prisma.trade.update({
+      where: { id },
+      data: {
+        exitPrice,
+        pnl: Number(pnl.toFixed(4)),
+        pnlPercent: Number(pnlPercent.toFixed(2)),
+        status: 'manually_closed',
+        closedAt: new Date(),
+      },
+    });
+
+    await this.prisma.order.create({
+      data: {
+        tradeId: id,
+        binanceOrderId: String(closeResult.orderId),
+        symbol: trade.symbol,
+        side,
+        type: 'MARKET',
+        quantity: trade.quantity,
+        price: exitPrice,
+        status: 'filled',
+        rawResponseJson: closeResult as unknown as Prisma.InputJsonValue,
+      },
+    });
+
+    await this.logsService.info('trades', 'Live trade manually closed', {
+      tradeId: id,
+      symbol: trade.symbol,
+      exitPrice,
+      pnl,
+    });
+
+    return updated;
   }
 }

@@ -8,8 +8,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import {
   BinanceAccountBalance,
   BinanceFundingRate,
+  BinanceIncome,
   BinanceKline,
   BinanceOpenInterest,
+  BinanceOrderResult,
   BinancePosition,
   BinanceSymbolInfo,
   BinanceTicker24h,
@@ -141,8 +143,12 @@ export class BinanceService {
     return this.signedRequest('POST', '/fapi/v1/leverage', { symbol, leverage });
   }
 
-  async placeOrder(input: PlaceOrderInput): Promise<unknown> {
-    return this.signedRequest('POST', '/fapi/v1/order', {
+  hasApiKeys(): boolean {
+    return !!(this.apiKey && this.apiSecret);
+  }
+
+  async placeOrder(input: PlaceOrderInput): Promise<BinanceOrderResult> {
+    return this.signedRequest<BinanceOrderResult>('POST', '/fapi/v1/order', {
       symbol: input.symbol,
       side: input.side,
       type: input.type,
@@ -157,5 +163,19 @@ export class BinanceService {
 
   async cancelOrder(symbol: string, orderId: string): Promise<unknown> {
     return this.signedRequest('DELETE', '/fapi/v1/order', { symbol, orderId });
+  }
+
+  async cancelAllOpenOrders(symbol: string): Promise<unknown> {
+    return this.signedRequest('DELETE', '/fapi/v1/allOpenOrders', { symbol });
+  }
+
+  async fetchRealizedPnl(symbol: string, startTime: number): Promise<number> {
+    const income = await this.signedRequest<BinanceIncome[]>('GET', '/fapi/v1/income', {
+      symbol,
+      incomeType: 'REALIZED_PNL',
+      startTime,
+      limit: 20,
+    });
+    return income.reduce((sum, entry) => sum + Number(entry.income), 0);
   }
 }

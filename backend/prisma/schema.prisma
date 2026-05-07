@@ -57,6 +57,36 @@ model BotSettings {
   minRiskReward                Float    @default(1.5)
   scannerIntervalSeconds       Int      @default(60)
   signalExpirationMinutes      Int      @default(15)
+  maxSymbolsPerScan            Int      @default(50)
+  minHotScoreForScan           Float    @default(55)
+
+  // Strategy: Breakout + Volume
+  breakoutEnabled              Boolean  @default(true)
+  breakoutMinVolumeRatio       Float    @default(1.5)
+  breakoutLookbackPeriod       Int      @default(20)
+  breakoutMaxSlPercent         Float    @default(5.0)
+  breakoutTp1Multiplier        Float    @default(1.5)
+  breakoutTp2Multiplier        Float    @default(2.5)
+  breakoutMinHotScore          Float    @default(55)
+
+  // Strategy: Trend Pullback Continuation
+  pullbackEnabled              Boolean  @default(true)
+  pullbackRsiLongMin           Float    @default(38)
+  pullbackRsiLongMax           Float    @default(58)
+  pullbackRsiShortMin          Float    @default(42)
+  pullbackRsiShortMax          Float    @default(62)
+  pullbackAtrMultiplier        Float    @default(1.5)
+  pullbackMaxSlPercent         Float    @default(4.0)
+  pullbackMinHotScore          Float    @default(40)
+
+  // Strategy: Mean Reversion
+  reversionEnabled             Boolean  @default(true)
+  reversionRsiOverbought       Float    @default(75)
+  reversionRsiOversold         Float    @default(25)
+  reversionVwapDeviationPct    Float    @default(3.0)
+  reversionVolumeDeclineRatio  Float    @default(0.6)
+  reversionMaxSlPercent        Float    @default(5.0)
+
   createdAt                    DateTime @default(now())
   updatedAt                    DateTime @updatedAt
 }
@@ -92,6 +122,8 @@ model MarketSnapshot {
   hotScore        Float
   createdAt       DateTime @default(now())
   symbol          Symbol   @relation(fields: [symbolId], references: [id])
+
+  @@index([symbolId, createdAt])
 }
 
 model Signal {
@@ -120,6 +152,10 @@ model Signal {
   expiresAt        DateTime
   symbol           Symbol          @relation(fields: [symbolId], references: [id])
   trades           Trade[]
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([symbolId])
 }
 
 model Trade {
@@ -140,6 +176,10 @@ model Trade {
   createdAt  DateTime    @default(now())
   signal     Signal?     @relation(fields: [signalId], references: [id])
   orders     Order[]
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([signalId])
 }
 
 model Order {
@@ -165,6 +205,9 @@ model RiskEvent {
   severity     String
   metadataJson Json
   createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([severity])
 }
 
 model BotLog {
@@ -174,4 +217,7 @@ model BotLog {
   message      String
   metadataJson Json
   createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([source])
 }

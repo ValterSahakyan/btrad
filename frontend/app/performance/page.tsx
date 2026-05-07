@@ -1,13 +1,15 @@
 import { DataTable } from '@/components/dashboard/data-table';
 import { MetricCard } from '@/components/dashboard/metric-card';
-import { fetchApi } from '@/services/api';
+import { fetchApiSafe } from '@/services/api';
 import { currency, number } from '@/lib/utils';
+
+const defaultPerformance = { totalTrades: 0, winRate: 0, averageWin: 0, averageLoss: 0 };
 
 export default async function PerformancePage() {
   const [performance, strategyPerformance, symbolPerformance] = await Promise.all([
-    fetchApi<any>('/performance'),
-    fetchApi<Record<string, { count: number; pnl: number }>>('/performance/strategies'),
-    fetchApi<Record<string, { count: number; pnl: number }>>('/performance/symbols'),
+    fetchApiSafe<any>('/performance', defaultPerformance),
+    fetchApiSafe<Record<string, { count: number; pnl: number }>>('/performance/strategies', {}),
+    fetchApiSafe<Record<string, { count: number; pnl: number }>>('/performance/symbols', {}),
   ]);
 
   return (

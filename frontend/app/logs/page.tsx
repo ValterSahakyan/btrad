@@ -1,8 +1,11 @@
 import { DataTable } from '@/components/dashboard/data-table';
-import { fetchApi } from '@/services/api';
+import { fetchApiSafe } from '@/services/api';
 
 export default async function LogsPage() {
-  const [logs, riskEvents] = await Promise.all([fetchApi<any[]>('/logs'), fetchApi<any[]>('/risk-events')]);
+  const [logs, riskEvents] = await Promise.all([
+    fetchApiSafe<any[]>('/logs', []),
+    fetchApiSafe<any[]>('/risk-events', []),
+  ]);
 
   return (
     <div className="grid gap-6 xl:grid-cols-2">

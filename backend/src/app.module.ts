@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { appEnv } from './config/env';
 import { validateEnv } from './config/validation';
 import { PrismaModule } from './prisma/prisma.module';
@@ -17,6 +19,9 @@ import { SignalsModule } from './signals/signals.module';
 import { TradesModule } from './trades/trades.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { AuthModule } from './auth/auth.module';
+import { AuthGuard } from './auth/auth.guard';
+import { TelegramModule } from './telegram/telegram.module';
+import { PositionMonitorModule } from './monitor/position-monitor.module';
 
 @Module({
   imports: [
@@ -24,7 +29,9 @@ import { AuthModule } from './auth/auth.module';
       isGlobal: true,
       load: [appEnv],
       validate: validateEnv,
+      envFilePath: ['.env', '../.env'],
     }),
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
     ScheduleModule.forRoot(),
     PrismaModule,
     LogsModule,
@@ -40,6 +47,11 @@ import { AuthModule } from './auth/auth.module';
     TradesModule,
     DashboardModule,
     AuthModule,
+    TelegramModule,
+    PositionMonitorModule,
+  ],
+  providers: [
+    { provide: APP_GUARD, useClass: AuthGuard },
   ],
 })
 export class AppModule {}

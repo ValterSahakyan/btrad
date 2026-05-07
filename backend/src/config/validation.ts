@@ -6,10 +6,11 @@ export const envSchema = z.object({
   BINANCE_API_KEY: z.string().default(''),
   BINANCE_API_SECRET: z.string().default(''),
   DATABASE_URL: z.string(),
-  REDIS_URL: z.string(),
+  REDIS_URL: z.string().default('redis://localhost:6379'),
   DASHBOARD_AUTH_ENABLED: z.enum(['true', 'false']).default('true'),
-  DASHBOARD_USERNAME: z.string().default('admin'),
-  DASHBOARD_PASSWORD: z.string().min(1),
+  DASHBOARD_ALLOWED_WALLET: z.string().default(''),
+  TELEGRAM_BOT_TOKEN: z.string().default(''),
+  TELEGRAM_CHAT_ID: z.string().default(''),
 });
 
 export const validateEnv = (config: Record<string, unknown>) => envSchema.parse(config);

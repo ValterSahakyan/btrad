@@ -2,11 +2,14 @@ import { DataTable } from '@/components/dashboard/data-table';
 import { ActionButton } from '@/components/actions/action-button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { fetchApi } from '@/services/api';
+import { fetchApiSafe } from '@/services/api';
 import { number } from '@/lib/utils';
 
 export default async function SignalsPage() {
-  const [signals, status] = await Promise.all([fetchApi<any[]>('/signals'), fetchApi<any>('/status')]);
+  const [signals, status] = await Promise.all([
+    fetchApiSafe<any[]>('/signals', []),
+    fetchApiSafe<any>('/status', { realTradingEnabled: false }),
+  ]);
 
   return (
     <div className="space-y-6">

@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 import { BinanceModule } from '../binance/binance.module';
+import { ExecutionModule } from '../execution/execution.module';
 import { LogsModule } from '../logs/logs.module';
 import { MarketRegimeModule } from '../market-regime/market-regime.module';
+import { PaperTradingModule } from '../paper-trading/paper-trading.module';
 import { RiskModule } from '../risk/risk.module';
 import { ScoringModule } from '../scoring/scoring.module';
 import { StrategiesModule } from '../strategies/strategies.module';
@@ -11,7 +13,7 @@ import { ScannerService } from './scanner.service';
 import { ScannerWorker } from './scanner.worker';
 
 @Module({
-  imports: [BinanceModule, LogsModule, MarketRegimeModule, StrategiesModule, ScoringModule, RiskModule],
+  imports: [BinanceModule, LogsModule, MarketRegimeModule, StrategiesModule, ScoringModule, RiskModule, PaperTradingModule, ExecutionModule],
   providers: [HotScoreService, ScannerService, ScannerScheduler, ScannerWorker],
   exports: [ScannerService],
 })

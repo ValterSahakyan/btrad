@@ -6,8 +6,9 @@ export interface AppEnv {
   databaseUrl: string;
   redisUrl: string;
   dashboardAuthEnabled: boolean;
-  dashboardUsername: string;
-  dashboardPassword: string;
+  dashboardAllowedWallet: string;
+  telegramBotToken: string;
+  telegramChatId: string;
 }
 
 export const appEnv = (): AppEnv => ({
@@ -18,6 +19,7 @@ export const appEnv = (): AppEnv => ({
   databaseUrl: process.env.DATABASE_URL ?? '',
   redisUrl: process.env.REDIS_URL ?? 'redis://localhost:6379',
   dashboardAuthEnabled: process.env.DASHBOARD_AUTH_ENABLED !== 'false',
-  dashboardUsername: process.env.DASHBOARD_USERNAME ?? 'admin',
-  dashboardPassword: process.env.DASHBOARD_PASSWORD ?? '',
+  dashboardAllowedWallet: (process.env.DASHBOARD_ALLOWED_WALLET ?? '').toLowerCase(),
+  telegramBotToken: process.env.TELEGRAM_BOT_TOKEN ?? '',
+  telegramChatId: process.env.TELEGRAM_CHAT_ID ?? '',
 });

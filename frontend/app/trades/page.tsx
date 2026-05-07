@@ -1,9 +1,9 @@
 import { DataTable } from '@/components/dashboard/data-table';
-import { fetchApi } from '@/services/api';
+import { fetchApiSafe } from '@/services/api';
 import { currency, number } from '@/lib/utils';
 
 export default async function TradesPage() {
-  const trades = await fetchApi<any[]>('/trades');
+  const trades = await fetchApiSafe<any[]>('/trades', []);
 
   return (
     <DataTable

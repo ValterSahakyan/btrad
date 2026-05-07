@@ -10,7 +10,7 @@ RUN npm ci
 
 COPY frontend ./frontend
 
-ARG NEXT_PUBLIC_API_BASE_URL=http://localhost:3000/api
+ARG NEXT_PUBLIC_API_BASE_URL=https://api.yogurtsoftware.info/api
 ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
 ENV NEXT_TELEMETRY_DISABLED=1
 

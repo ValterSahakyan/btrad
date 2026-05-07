@@ -1,7 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { BinanceService } from '../binance/binance.service';
 import { LogsService } from '../logs/logs.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class OrderExecutionService {
@@ -11,23 +12,161 @@ export class OrderExecutionService {
     private readonly logsService: LogsService,
   ) {}
 
-  async approveLive(signalId: string): Promise<never> {
-    const signal = await this.prisma.signal.findUnique({ where: { id: signalId } });
-    if (!signal) {
-      throw new BadRequestException('Signal not found');
+  async approveLive(signalId: string): Promise<unknown> {
+    if (!this.binanceService.hasApiKeys()) {
+      throw new BadRequestException('Binance API keys are not configured — set BINANCE_API_KEY and BINANCE_API_SECRET');
     }
 
-    await this.logsService.risk(
-      'live_execution_blocked',
-      'Live execution path is intentionally disabled in MVP without explicit environment enablement',
-      'critical',
-      { signalId },
-    );
+    const signal = await this.prisma.signal.findUnique({
+      where: { id: signalId },
+      include: { symbol: true },
+    });
+    if (!signal) throw new NotFoundException('Signal not found');
+    if (signal.expiresAt < new Date()) throw new BadRequestException('Signal has expired');
 
-    throw new BadRequestException('Live execution remains safety-disabled in the MVP');
-  }
+    const settings = await this.prisma.botSettings.findFirst();
+    if (!settings?.realTradingEnabled) throw new BadRequestException('Real trading is not enabled in settings');
+    if (settings.mode !== 'live') throw new BadRequestException('Bot must be in live mode to place live orders');
 
-  async prepareLiveOrder(symbol: string, leverage: number): Promise<unknown> {
-    return this.binanceService.setLeverage(symbol, leverage);
+    const sym = signal.symbol;
+    const stepSize = sym.stepSize;
+    const steps = Math.floor(signal.positionSize / stepSize);
+    const quantity = Number((steps * stepSize).toFixed(sym.quantityPrecision));
+
+    if (quantity <= 0) throw new BadRequestException('Position size is zero after step-size rounding');
+    if (quantity * signal.entryPrice < sym.minNotional) {
+      throw new BadRequestException(`Position size below Binance minimum notional ($${sym.minNotional})`);
+    }
+
+    // Validate available balance covers the required margin
+    const balanceRows = await this.binanceService.fetchAccountBalance();
+    const availableBalance = Number(balanceRows.find((row) => row.asset === 'USDT')?.availableBalance ?? 0);
+    const requiredMargin = (quantity * signal.entryPrice) / signal.leverage;
+    if (availableBalance < requiredMargin) {
+      throw new BadRequestException(
+        `Insufficient USDT balance: need $${requiredMargin.toFixed(2)}, have $${availableBalance.toFixed(2)}`,
+      );
+    }
+
+    await this.binanceService.setLeverage(sym.symbol, signal.leverage);
+
+    const side = signal.direction === 'LONG' ? 'BUY' : 'SELL';
+    const closeSide = signal.direction === 'LONG' ? 'SELL' : 'BUY';
+    const ts = Date.now();
+    const idPrefix = signalId.slice(0, 8);
+
+    // Entry MARKET order
+    const entryResult = await this.binanceService.placeOrder({
+      symbol: sym.symbol,
+      side,
+      type: 'MARKET',
+      quantity,
+      clientOrderId: `${idPrefix}-e-${ts}`,
+    });
+
+    const trade = await this.prisma.trade.create({
+      data: {
+        signalId: signal.id,
+        symbol: sym.symbol,
+        direction: signal.direction,
+        entryPrice: Number(entryResult.avgPrice) || signal.entryPrice,
+        quantity,
+        leverage: signal.leverage,
+        margin: signal.riskAmount,
+        status: 'live_open',
+        openedAt: new Date(),
+      },
+    });
+
+    await this.prisma.order.create({
+      data: {
+        tradeId: trade.id,
+        binanceOrderId: String(entryResult.orderId),
+        symbol: sym.symbol,
+        side,
+        type: 'MARKET',
+        quantity,
+        price: Number(entryResult.avgPrice) || signal.entryPrice,
+        status: 'filled',
+        rawResponseJson: entryResult as unknown as Prisma.InputJsonValue,
+      },
+    });
+
+    // Stop-loss STOP_MARKET order
+    const slResult = await this.binanceService
+      .placeOrder({
+        symbol: sym.symbol,
+        side: closeSide,
+        type: 'STOP_MARKET',
+        quantity,
+        stopPrice: Number(signal.stopLoss.toFixed(sym.pricePrecision)),
+        reduceOnly: true,
+        clientOrderId: `${idPrefix}-sl-${ts}`,
+      })
+      .catch(async (err) => {
+        await this.logsService.error('execution', 'SL order failed', { error: err.message, signalId });
+        return null;
+      });
+
+    if (slResult) {
+      await this.prisma.order.create({
+        data: {
+          tradeId: trade.id,
+          binanceOrderId: String(slResult.orderId),
+          symbol: sym.symbol,
+          side: closeSide,
+          type: 'STOP_MARKET',
+          quantity,
+          price: signal.stopLoss,
+          status: 'open',
+          rawResponseJson: slResult as unknown as Prisma.InputJsonValue,
+        },
+      });
+    }
+
+    // Take-profit TAKE_PROFIT_MARKET order
+    const tpResult = await this.binanceService
+      .placeOrder({
+        symbol: sym.symbol,
+        side: closeSide,
+        type: 'TAKE_PROFIT_MARKET',
+        quantity,
+        stopPrice: Number(signal.takeProfit1.toFixed(sym.pricePrecision)),
+        reduceOnly: true,
+        clientOrderId: `${idPrefix}-tp-${ts}`,
+      })
+      .catch(async (err) => {
+        await this.logsService.error('execution', 'TP order failed', { error: err.message, signalId });
+        return null;
+      });
+
+    if (tpResult) {
+      await this.prisma.order.create({
+        data: {
+          tradeId: trade.id,
+          binanceOrderId: String(tpResult.orderId),
+          symbol: sym.symbol,
+          side: closeSide,
+          type: 'TAKE_PROFIT_MARKET',
+          quantity,
+          price: signal.takeProfit1,
+          status: 'open',
+          rawResponseJson: tpResult as unknown as Prisma.InputJsonValue,
+        },
+      });
+    }
+
+    await this.prisma.signal.update({ where: { id: signalId }, data: { status: 'live_executed' } });
+    await this.logsService.info('execution', 'Live order placed', {
+      signalId,
+      tradeId: trade.id,
+      symbol: sym.symbol,
+      direction: signal.direction,
+      quantity,
+      leverage: signal.leverage,
+      entryPrice: trade.entryPrice,
+    });
+
+    return trade;
   }
 }

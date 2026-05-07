@@ -1,0 +1,7 @@
+yogurtsoftware.info {
+    reverse_proxy frontend:3001
+}
+
+api.yogurtsoftware.info {
+    reverse_proxy backend:3000
+}

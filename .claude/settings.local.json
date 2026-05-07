@@ -2,7 +2,32 @@
   "permissions": {
     "allow": [
       "Bash(npm --workspace backend run prisma:generate)",
-      "Bash(npm --workspace backend run build)"
+      "Bash(npm --workspace backend run build)",
+      "Bash(npm --workspace backend install --save-dev dotenv-cli)",
+      "Bash(xargs wc *)",
+      "Bash(npm --workspace backend install @nestjs/throttler)",
+      "Bash(npm install *)",
+      "Bash(npx prisma *)",
+      "Bash(npx tsc *)",
+      "Bash(tasklist /fi \"IMAGENAME eq node.exe\" /fo csv)",
+      "PowerShell(Get-Process node -ErrorAction SilentlyContinue)",
+      "Bash(npm --workspace backend run start:dev)",
+      "Bash(echo \"Backend starting, PID: $!\")",
+      "PowerShell(Get-Process -Id 3860)",
+      "PowerShell(Get-Process -Id 3860 -ErrorAction SilentlyContinue)",
+      "Bash(curl -s http://localhost:3000/health)",
+      "Bash(curl -s http://localhost:3000/api/settings)",
+      "PowerShell(Stop-Process -Id 3860 -Force -ErrorAction SilentlyContinue)",
+      "Bash(echo \"Backend PID: $!\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\([k for k in d if k.startswith\\(\\('breakout','pullback','reversion'\\)\\)]\\)\")",
+      "Bash(curl -s http://localhost:3001/settings)",
+      "Bash(npm --workspace backend install ethers)",
+      "Bash(netstat -ano)",
+      "Bash(findstr \":3000\")",
+      "Bash(findstr \"LISTENING\")",
+      "Bash(taskkill /PID 20260 /F)",
+      "PowerShell(Stop-Process -Id 20260 -Force)",
+      "PowerShell($pids = \\(Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue\\).OwningProcess | Select-Object -Unique; if \\($pids\\) { $pids | ForEach-Object { $p = Get-Process -Id $_ -ErrorAction SilentlyContinue; Write-Host \"PID $_ \\($\\($p.Name\\)\\)\"; Stop-Process -Id $_ -Force } } else { Write-Host \"No process found on port 3000\" })"
     ]
   }
 }

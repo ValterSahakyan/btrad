@@ -1,4 +1,3 @@
-import { ConfigService } from '@nestjs/config';
 import { RiskEngineService } from './risk-engine.service';
 import { PositionSizeService } from './position-size.service';
 
@@ -11,17 +10,8 @@ describe('RiskEngineService', () => {
         findMany: jest.fn().mockResolvedValue([]),
       },
     };
-    const config = new ConfigService({
-      riskPerTradePercent: 1,
-      maxOpenTrades: 2,
-      maxDailyLossPercent: 3,
-      maxConsecutiveLosses: 3,
-      maxLeverage: 5,
-      minRiskReward: 1.5,
-      defaultLeverage: 3,
-    });
     const binance = { fetchAccountBalance: jest.fn().mockResolvedValue([]) };
-    const service = new RiskEngineService(prisma as never, config, binance as never, new PositionSizeService());
+    const service = new RiskEngineService(prisma as never, binance as never, new PositionSizeService());
 
     const result = await service.validateSignal({
       symbol: 'BTCUSDT',

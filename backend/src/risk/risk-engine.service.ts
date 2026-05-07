@@ -26,6 +26,7 @@ export class RiskEngineService {
     confidenceScore: number;
     expiresAt: Date;
     marketRegime: string;
+    stepSize?: number;
   }): Promise<RiskValidationResult> {
     const settings = await this.prisma.botSettings.findFirst();
     const openTrades = await this.prisma.trade.count({
@@ -38,7 +39,10 @@ export class RiskEngineService {
       orderBy: { closedAt: 'desc' },
       select: { pnl: true },
     });
-    const balanceRows = await this.binanceService.fetchAccountBalance().catch(() => []);
+    const balanceRows = await this.binanceService.fetchAccountBalance().catch((err) => {
+      if (settings?.mode === 'live') throw err;
+      return [];
+    });
     const usdtBalance = Number(balanceRows.find((row) => row.asset === 'USDT')?.availableBalance ?? 1000);
 
     const riskPerTradePercent = settings?.riskPerTradePercent ?? 1;
@@ -61,6 +65,7 @@ export class RiskEngineService {
       riskPerTradePercent,
       input.entryPrice,
       input.stopLoss,
+      input.stepSize,
     );
 
     const messages: string[] = [];

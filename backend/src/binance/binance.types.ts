@@ -74,3 +74,23 @@ export interface ParsedMarketData {
   fundingRate: number;
   openInterest: number;
 }
+
+export interface BinanceOrderResult {
+  orderId: number;
+  clientOrderId: string;
+  symbol: string;
+  status: string;
+  side: string;
+  type: string;
+  avgPrice: string;
+  price: string;
+  executedQty: string;
+}
+
+export interface BinanceIncome {
+  symbol: string;
+  incomeType: string;
+  income: string;
+  asset: string;
+  time: number;
+}

@@ -2,17 +2,20 @@ import { DataTable } from '@/components/dashboard/data-table';
 import { MetricCard } from '@/components/dashboard/metric-card';
 import { PnlChart } from '@/components/dashboard/pnl-chart';
 import { Badge } from '@/components/ui/badge';
-import { fetchApi } from '@/services/api';
+import { fetchApiSafe } from '@/services/api';
 import { currency, number } from '@/lib/utils';
+
+const defaultStatus = { botStatus: 'offline', mode: 'testnet', realTradingEnabled: false, openTrades: 0, activeSignals: 0 };
+const defaultPerformance = { totalPnl: 0, winRate: 0, profitFactor: 0, averageWin: 0, averageLoss: 0, totalTrades: 0 };
 
 export default async function OverviewPage() {
   const [status, performance, daily, signals, trades, logs] = await Promise.all([
-    fetchApi<any>('/status'),
-    fetchApi<any>('/performance'),
-    fetchApi<any[]>('/performance/daily'),
-    fetchApi<any[]>('/signals'),
-    fetchApi<any[]>('/trades'),
-    fetchApi<any[]>('/logs'),
+    fetchApiSafe<any>('/status', defaultStatus),
+    fetchApiSafe<any>('/performance', defaultPerformance),
+    fetchApiSafe<any[]>('/performance/daily', []),
+    fetchApiSafe<any[]>('/signals', []),
+    fetchApiSafe<any[]>('/trades', []),
+    fetchApiSafe<any[]>('/logs', []),
   ]);
 
   return (

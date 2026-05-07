@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaperTradingService } from '../paper-trading/paper-trading.service';
 import { OrderExecutionService } from '../execution/order-execution.service';
@@ -33,6 +33,9 @@ export class SignalsService {
   }
 
   async approvePaper(id: string) {
+    const signal = await this.prisma.signal.findUnique({ where: { id } });
+    if (!signal) throw new NotFoundException('Signal not found');
+    if (signal.expiresAt < new Date()) throw new BadRequestException('Signal has expired');
     await this.logsService.info('signals', 'Paper trade approved', { signalId: id });
     await this.prisma.signal.update({ where: { id }, data: { status: 'approved' } });
     return this.paperTradingService.openFromSignal(id);
