@@ -195,7 +195,7 @@ export function SettingsForm({ settings }: { settings: any }) {
           {label}{unit ? <span className="ml-1 text-xs opacity-50">({unit})</span> : null}
         </div>
         {key === 'mode' ? (
-          <select className={inputClass} value={value as string} onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}>
+          <select className={inputClass} value={value as string} onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value as 'testnet' | 'live' }))}>
             <option value="testnet">testnet</option>
             <option value="live">live</option>
           </select>
