@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --workspace backend run prisma:generate)",
+      "Bash(npm --workspace backend run build)"
+    ]
+  }
+}

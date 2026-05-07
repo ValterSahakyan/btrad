@@ -1,0 +1,177 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum BotMode {
+  testnet
+  live
+}
+
+enum SignalDirection {
+  LONG
+  SHORT
+}
+
+enum SignalStatus {
+  pending
+  active
+  approved
+  skipped
+  expired
+  paper_opened
+  live_executed
+  failed
+  cancelled
+}
+
+enum TradeStatus {
+  paper_open
+  paper_closed
+  live_open
+  live_closed
+  stopped
+  take_profit
+  manually_closed
+  failed
+}
+
+model BotSettings {
+  id                           String   @id @default(cuid())
+  mode                         BotMode  @default(testnet)
+  isPaused                     Boolean  @default(false)
+  realTradingEnabled           Boolean  @default(false)
+  requireDashboardConfirmation Boolean  @default(true)
+  paperTradingEnabled          Boolean  @default(true)
+  defaultLeverage              Int      @default(3)
+  maxLeverage                  Int      @default(5)
+  riskPerTradePercent          Float    @default(1)
+  maxDailyLossPercent          Float    @default(3)
+  maxOpenTrades                Int      @default(2)
+  maxConsecutiveLosses         Int      @default(3)
+  minConfidenceScore           Float    @default(70)
+  minRiskReward                Float    @default(1.5)
+  scannerIntervalSeconds       Int      @default(60)
+  signalExpirationMinutes      Int      @default(15)
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+}
+
+model Symbol {
+  id                String   @id @default(cuid())
+  symbol            String   @unique
+  baseAsset         String
+  quoteAsset        String
+  status            String
+  minNotional       Float
+  quantityPrecision Int
+  pricePrecision    Int
+  stepSize          Float
+  tickSize          Float
+  isEnabled         Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  snapshots         MarketSnapshot[]
+  signals           Signal[]
+}
+
+model MarketSnapshot {
+  id              String   @id @default(cuid())
+  symbolId        String
+  price           Float
+  volume24h       Float
+  priceChange24h  Float
+  fundingRate     Float
+  openInterest    Float
+  spread          Float
+  volatility      Float
+  hotScore        Float
+  createdAt       DateTime @default(now())
+  symbol          Symbol   @relation(fields: [symbolId], references: [id])
+}
+
+model Signal {
+  id               String          @id @default(cuid())
+  symbolId         String
+  direction        SignalDirection
+  strategy         String
+  entryPrice       Float
+  stopLoss         Float
+  takeProfit1      Float
+  takeProfit2      Float
+  leverage         Int
+  riskAmount       Float
+  positionSize     Float
+  riskReward       Float
+  hotScore         Float
+  marketScore      Float
+  strategyScore    Float
+  liquidityScore   Float
+  riskScore        Float
+  confidenceScore  Float
+  reasonJson       Json
+  invalidationJson Json
+  status           SignalStatus    @default(pending)
+  createdAt        DateTime        @default(now())
+  expiresAt        DateTime
+  symbol           Symbol          @relation(fields: [symbolId], references: [id])
+  trades           Trade[]
+}
+
+model Trade {
+  id         String      @id @default(cuid())
+  signalId   String?
+  symbol     String
+  direction  SignalDirection
+  entryPrice Float
+  exitPrice  Float?
+  quantity   Float
+  leverage   Int
+  margin     Float
+  pnl        Float?
+  pnlPercent Float?
+  status     TradeStatus
+  openedAt   DateTime?
+  closedAt   DateTime?
+  createdAt  DateTime    @default(now())
+  signal     Signal?     @relation(fields: [signalId], references: [id])
+  orders     Order[]
+}
+
+model Order {
+  id              String   @id @default(cuid())
+  tradeId         String
+  binanceOrderId  String?
+  symbol          String
+  side            String
+  type            String
+  quantity        Float
+  price           Float?
+  status          String
+  rawResponseJson Json
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  trade           Trade    @relation(fields: [tradeId], references: [id])
+}
+
+model RiskEvent {
+  id           String   @id @default(cuid())
+  type         String
+  message      String
+  severity     String
+  metadataJson Json
+  createdAt    DateTime @default(now())
+}
+
+model BotLog {
+  id           String   @id @default(cuid())
+  level        String
+  source       String
+  message      String
+  metadataJson Json
+  createdAt    DateTime @default(now())
+}

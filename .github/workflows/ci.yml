@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: perpscout
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d perpscout"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_ENV: test
+      APP_PORT: 3000
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:3000/api
+      BINANCE_MODE: testnet
+      BINANCE_API_KEY: ""
+      BINANCE_API_SECRET: ""
+      ENABLE_REAL_TRADING: "false"
+      REQUIRE_DASHBOARD_CONFIRMATION: "true"
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/perpscout
+      REDIS_URL: redis://localhost:6379
+      SCANNER_INTERVAL_SECONDS: "60"
+      SIGNAL_EXPIRATION_MINUTES: "15"
+      DEFAULT_LEVERAGE: "3"
+      MAX_LEVERAGE: "5"
+      RISK_PER_TRADE_PERCENT: "1"
+      MAX_DAILY_LOSS_PERCENT: "3"
+      MAX_OPEN_TRADES: "2"
+      MAX_CONSECUTIVE_LOSSES: "3"
+      MIN_CONFIDENCE_SCORE: "70"
+      MIN_RISK_REWARD: "1.5"
+      PAPER_TRADING_ENABLED: "true"
+      DASHBOARD_AUTH_ENABLED: "true"
+      DASHBOARD_USERNAME: admin
+      DASHBOARD_PASSWORD: ci-password
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm --workspace backend run prisma:generate
+
+      - name: Build workspaces
+        run: npm run build
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build backend image
+        run: docker build -f backend/Dockerfile -t perpscout-backend .
+
+      - name: Build frontend image
+        run: docker build -f frontend/Dockerfile -t perpscout-frontend --build-arg NEXT_PUBLIC_API_BASE_URL=http://localhost:3000/api .
