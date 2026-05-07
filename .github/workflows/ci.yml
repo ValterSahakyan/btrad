@@ -36,29 +36,16 @@ jobs:
 
     env:
       NODE_ENV: test
-      APP_PORT: 3000
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:3000/api
-      BINANCE_MODE: testnet
-      BINANCE_API_KEY: ""
-      BINANCE_API_SECRET: ""
-      ENABLE_REAL_TRADING: "false"
-      REQUIRE_DASHBOARD_CONFIRMATION: "true"
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/perpscout
       REDIS_URL: redis://localhost:6379
-      SCANNER_INTERVAL_SECONDS: "60"
-      SIGNAL_EXPIRATION_MINUTES: "15"
-      DEFAULT_LEVERAGE: "3"
-      MAX_LEVERAGE: "5"
-      RISK_PER_TRADE_PERCENT: "1"
-      MAX_DAILY_LOSS_PERCENT: "3"
-      MAX_OPEN_TRADES: "2"
-      MAX_CONSECUTIVE_LOSSES: "3"
-      MIN_CONFIDENCE_SCORE: "70"
-      MIN_RISK_REWARD: "1.5"
-      PAPER_TRADING_ENABLED: "true"
-      DASHBOARD_AUTH_ENABLED: "true"
-      DASHBOARD_USERNAME: admin
-      DASHBOARD_PASSWORD: ci-password
+      APP_PORT: "3000"
+      BINANCE_API_KEY: ""
+      BINANCE_API_SECRET: ""
+      DASHBOARD_AUTH_ENABLED: "false"
+      DASHBOARD_ALLOWED_WALLET: "0x0000000000000000000000000000000000000000"
+      TELEGRAM_BOT_TOKEN: ""
+      TELEGRAM_CHAT_ID: ""
+      NEXT_PUBLIC_API_BASE_URL: "http://localhost:3000/api"
 
     steps:
       - uses: actions/checkout@v4
@@ -74,14 +61,22 @@ jobs:
       - name: Generate Prisma client
         run: npm --workspace backend run prisma:generate
 
-      - name: Build workspaces
-        run: npm run build
+      - name: Run database migrations
+        run: npx prisma migrate deploy --schema=backend/prisma/schema.prisma
 
-      - name: Run tests
-        run: npm test
+      - name: TypeScript check — backend
+        run: npx tsc --noEmit --project backend/tsconfig.json
 
-      - name: Build backend image
-        run: docker build -f backend/Dockerfile -t perpscout-backend .
+      - name: TypeScript check — frontend
+        run: npx tsc --noEmit --project frontend/tsconfig.json
 
-      - name: Build frontend image
-        run: docker build -f frontend/Dockerfile -t perpscout-frontend --build-arg NEXT_PUBLIC_API_BASE_URL=http://localhost:3000/api .
+      - name: Build backend
+        run: npm --workspace backend run build
+
+      - name: Run backend tests
+        run: npm --workspace backend run test
+
+      - name: Build frontend
+        run: npm --workspace frontend run build
+        env:
+          NEXT_PUBLIC_API_BASE_URL: "http://localhost:3000/api"

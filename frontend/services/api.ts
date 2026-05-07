@@ -1,6 +1,9 @@
 import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 
 const API_BASE = process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3000/api';
+
+class ApiUnauthorizedError extends Error {}
 
 async function getAuthCookie(): Promise<string> {
   try {
@@ -33,6 +36,10 @@ export async function fetchApi<T>(path: string, init?: RequestInit): Promise<T> 
     throw new Error(`Backend unreachable at ${url}: ${err instanceof Error ? err.message : String(err)}`);
   }
 
+  if (response.status === 401) {
+    throw new ApiUnauthorizedError();
+  }
+
   if (!response.ok) {
     throw new Error(`API request failed: ${response.status} ${response.statusText} (${url})`);
   }
@@ -43,7 +50,10 @@ export async function fetchApi<T>(path: string, init?: RequestInit): Promise<T> 
 export async function fetchApiSafe<T>(path: string, fallback: T, init?: RequestInit): Promise<T> {
   try {
     return await fetchApi<T>(path, init);
-  } catch {
+  } catch (err) {
+    if (err instanceof ApiUnauthorizedError) {
+      redirect('/login');
+    }
     return fallback;
   }
 }

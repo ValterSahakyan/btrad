@@ -4,70 +4,60 @@ on:
   push:
     branches:
       - main
-    tags:
-      - "v*"
   workflow_dispatch:
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_BACKEND: ${{ github.repository_owner }}/perpscout-backend
-  IMAGE_FRONTEND: ${{ github.repository_owner }}/perpscout-frontend
+# Only one deployment runs at a time — never overlap
+concurrency:
+  group: production
+  cancel-in-progress: false
 
 jobs:
-  publish-images:
+  # ── 1. Run full CI first — never deploy broken code to a live trading bot ──
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  # ── 2. Deploy to production VPS ───────────────────────────────────────────
+  deploy:
+    needs: ci
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
+    environment: production
 
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v1
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          script: |
+            set -e
+            cd /var/www/btrad
 
-      - name: Extract backend image metadata
-        id: backend-meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_BACKEND }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=tag
-            type=sha
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            # Pull latest code
+            git pull origin main
 
-      - name: Extract frontend image metadata
-        id: frontend-meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_FRONTEND }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=tag
-            type=sha
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            # Install dependencies (all workspaces)
+            npm ci
 
-      - name: Build and push backend image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: backend/Dockerfile
-          push: true
-          tags: ${{ steps.backend-meta.outputs.tags }}
-          labels: ${{ steps.backend-meta.outputs.labels }}
+            # Build backend
+            npm --workspace backend run prisma:generate
+            npm --workspace backend run build
 
-      - name: Build and push frontend image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: frontend/Dockerfile
-          build-args: |
-            NEXT_PUBLIC_API_BASE_URL=http://localhost:3000/api
-          push: true
-          tags: ${{ steps.frontend-meta.outputs.tags }}
-          labels: ${{ steps.frontend-meta.outputs.labels }}
+            # Build frontend
+            NEXT_PUBLIC_API_BASE_URL=https://api.yogurtsoftware.info/api \
+              npm --workspace frontend run build
+
+            # Build Docker images from the freshly built source
+            docker compose build backend frontend
+
+            # Restart backend first (runs DB migrations on startup), then frontend
+            # postgres and redis are untouched — no DB downtime
+            docker compose up -d --no-deps backend
+            sleep 15
+            docker compose up -d --no-deps frontend
+
+            # Remove dangling images to free disk space
+            docker image prune -f
+
+            echo "✅ Deployed $(git rev-parse --short HEAD) to production"

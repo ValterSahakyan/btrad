@@ -29,7 +29,12 @@
       "PowerShell(Stop-Process -Id 20260 -Force)",
       "PowerShell($pids = \\(Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue\\).OwningProcess | Select-Object -Unique; if \\($pids\\) { $pids | ForEach-Object { $p = Get-Process -Id $_ -ErrorAction SilentlyContinue; Write-Host \"PID $_ \\($\\($p.Name\\)\\)\"; Stop-Process -Id $_ -Force } } else { Write-Host \"No process found on port 3000\" })",
       "Bash(npm --workspace backend run prisma:migrate -- --name add_indexes)",
-      "PowerShell($pids = \\(Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue\\).OwningProcess | Select-Object -Unique; if \\($pids\\) { $pids | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue; Write-Host \"Killed PID $_\" } } else { Write-Host \"Port 3000 free\" })"
+      "PowerShell($pids = \\(Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue\\).OwningProcess | Select-Object -Unique; if \\($pids\\) { $pids | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue; Write-Host \"Killed PID $_\" } } else { Write-Host \"Port 3000 free\" })",
+      "Bash(npx ts-node *)",
+      "Bash(npm run *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/api/settings)",
+      "Bash(xargs grep *)",
+      "Bash(curl -s http://localhost:3000/api/settings -H \"Cookie: perpscout_session=invalid\" -w \"\\\\n%{http_code}\")"
     ]
   }
 }
