@@ -16,6 +16,7 @@ type SettingsState = {
   riskPerTradePercent: number;
   maxDailyLossPercent: number;
   maxOpenTrades: number;
+  maxHoldingHours: number;
   maxConsecutiveLosses: number;
   minPositionUsd: number;
   maxPositionUsd: number;
@@ -69,6 +70,7 @@ const SECTIONS: Section[] = [
       { key: 'riskPerTradePercent',   label: 'Risk / Trade',     unit: '%' },
       { key: 'maxDailyLossPercent',   label: 'Daily Loss Limit', unit: '%' },
       { key: 'maxOpenTrades',         label: 'Max Open Trades' },
+      { key: 'maxHoldingHours',       label: 'Max Holding',      unit: 'hours (0=off)' },
       { key: 'maxConsecutiveLosses',  label: 'Max Consec. Losses' },
       { key: 'maxPositionUsd',        label: 'Max Position',     unit: 'USD' },
       { key: 'minPositionUsd',        label: 'Min Position',     unit: 'USD' },
@@ -150,6 +152,7 @@ export function SettingsForm({ settings }: { settings: any }) {
     riskPerTradePercent: settings.riskPerTradePercent ?? 1,
     maxDailyLossPercent: settings.maxDailyLossPercent ?? 3,
     maxOpenTrades: settings.maxOpenTrades ?? 2,
+    maxHoldingHours: settings.maxHoldingHours ?? 0,
     maxConsecutiveLosses: settings.maxConsecutiveLosses ?? 3,
     maxPositionUsd: settings.maxPositionUsd ?? 3,
     minPositionUsd: settings.minPositionUsd ?? 1,

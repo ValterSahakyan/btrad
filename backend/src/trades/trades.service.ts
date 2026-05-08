@@ -140,11 +140,11 @@ export class TradesService {
   async clearClosed(): Promise<{ deletedCount: number; message: string }> {
     const closedStatuses = [
       'live_closed', 'stopped',
-      'take_profit', 'manually_closed', 'failed',
+      'take_profit', 'time_stop', 'manually_closed', 'failed',
     ] as const;
 
     const rows = await this.prisma.trade.findMany({
-      where: { status: { in: [...closedStatuses] } },
+      where: { status: { in: [...closedStatuses] as never } },
       select: { id: true },
     });
     const ids = rows.map((r) => r.id);

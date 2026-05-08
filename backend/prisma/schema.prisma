@@ -33,6 +33,7 @@ enum TradeStatus {
   live_closed
   stopped
   take_profit
+  time_stop
   manually_closed
   failed
 }
@@ -48,6 +49,7 @@ model BotSettings {
   riskPerTradePercent          Float    @default(1)
   maxDailyLossPercent          Float    @default(3)
   maxOpenTrades                Int      @default(2)
+  maxHoldingHours              Int      @default(0)
   maxConsecutiveLosses         Int      @default(3)
   minConfidenceScore           Float    @default(65)
   minRiskReward                Float    @default(1.5)

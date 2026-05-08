@@ -57,6 +57,12 @@ export class UpdateSettingsDto {
 
   @IsOptional()
   @IsInt()
+  @Min(0)
+  @Max(168)
+  maxHoldingHours?: number;
+
+  @IsOptional()
+  @IsInt()
   @Min(1)
   @Max(20)
   maxConsecutiveLosses?: number;
