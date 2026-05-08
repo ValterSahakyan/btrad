@@ -46,6 +46,8 @@ export interface PlaceOrderInput {
   price?: number;
   stopPrice?: number;
   reduceOnly?: boolean;
+  closePosition?: boolean;
+  workingType?: 'MARK_PRICE' | 'CONTRACT_PRICE';
   clientOrderId: string;
 }
 

@@ -148,6 +148,8 @@ export class OrderExecutionService {
     // ── Stop-loss STOP_MARKET ─────────────────────────────────────────────────
     // CRITICAL: if this fails we close the position immediately — never leave
     // real money in an unprotected position.
+    // closePosition:true closes the full position without specifying quantity,
+    // which avoids Binance error -4120 on reduceOnly conditional orders.
     const slResult = await this.binanceService
       .placeOrder({
         symbol: sym.symbol,
@@ -155,7 +157,7 @@ export class OrderExecutionService {
         type: 'STOP_MARKET',
         quantity,
         stopPrice: Number(signal.stopLoss.toFixed(sym.pricePrecision)),
-        reduceOnly: true,
+        closePosition: true,
         clientOrderId: `${idPrefix}-sl-${ts}-${rand}`,
       })
       .catch(async (err) => {
@@ -224,7 +226,7 @@ export class OrderExecutionService {
         type: 'TAKE_PROFIT_MARKET',
         quantity,
         stopPrice: Number(signal.takeProfit1.toFixed(sym.pricePrecision)),
-        reduceOnly: true,
+        closePosition: true,
         clientOrderId: `${idPrefix}-tp-${ts}-${rand}`,
       })
       .catch(async (err) => {

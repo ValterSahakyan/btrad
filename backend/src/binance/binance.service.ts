@@ -190,14 +190,19 @@ export class BinanceService {
   }
 
   async placeOrder(input: PlaceOrderInput): Promise<BinanceOrderResult> {
+    const isConditional = input.type === 'STOP_MARKET' || input.type === 'TAKE_PROFIT_MARKET';
+    // When closePosition=true, quantity and reduceOnly must be omitted (Binance requirement)
+    const useClosePosition = input.closePosition === true;
     return this.signedRequest<BinanceOrderResult>('POST', '/fapi/v1/order', {
       symbol: input.symbol,
       side: input.side,
       type: input.type,
-      quantity: input.quantity,
+      quantity: useClosePosition ? undefined : input.quantity,
       price: input.price,
       stopPrice: input.stopPrice,
-      reduceOnly: input.reduceOnly,
+      reduceOnly: useClosePosition ? undefined : input.reduceOnly,
+      closePosition: useClosePosition ? true : undefined,
+      workingType: isConditional ? 'MARK_PRICE' : undefined,
       newClientOrderId: input.clientOrderId,
       timeInForce: input.type === 'LIMIT' ? 'GTC' : undefined,
     });

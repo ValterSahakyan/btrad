@@ -6,6 +6,9 @@ import { useToast } from '@/hooks/use-toast';
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3333/api';
 const REFRESH_MS = 10_000;
+// Only announce a trade that has been open for at least this many ms (avoids
+// announcing positions that immediately fail due to SL rejection)
+const ANNOUNCE_DEBOUNCE_MS = 15_000;
 const TRACKED_STATUSES = new Set(['live_open', 'paper_open']);
 const STORAGE_KEY = 'perpscout_seen_open_trade_ids';
 
@@ -14,6 +17,8 @@ type TradeRow = {
   symbol: string;
   direction: 'LONG' | 'SHORT';
   status: string;
+  openedAt?: string;
+  createdAt: string;
 };
 
 export function TradeVoiceNotifier() {
@@ -77,6 +82,9 @@ export function TradeVoiceNotifier() {
         for (const trade of openTrades) {
           if (seenTradeIdsRef.current.has(trade.id)) continue;
           if (disposed) return;
+          // Only announce if the trade has been open long enough to be real
+          const openedMs = new Date(trade.openedAt ?? trade.createdAt).getTime();
+          if (Date.now() - openedMs < ANNOUNCE_DEBOUNCE_MS) continue;
           speakTradeOpened(trade);
           seenTradeIdsRef.current.add(trade.id);
         }
