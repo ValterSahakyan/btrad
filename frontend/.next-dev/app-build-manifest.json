@@ -16,20 +16,15 @@
       "static/chunks/main-app.js",
       "static/chunks/app/settings/page.js"
     ],
-    "/trades/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/trades/page.js"
-    ],
     "/signals/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/signals/page.js"
     ],
-    "/hot-coins/page": [
+    "/trades/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/hot-coins/page.js"
+      "static/chunks/app/trades/page.js"
     ]
   }
 }

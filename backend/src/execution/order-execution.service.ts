@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { BinanceService } from '../binance/binance.service';
 import { LogsService } from '../logs/logs.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { TelegramService } from '../telegram/telegram.service';
 
 @Injectable()
 export class OrderExecutionService {
@@ -10,6 +11,7 @@ export class OrderExecutionService {
     private readonly prisma: PrismaService,
     private readonly binanceService: BinanceService,
     private readonly logsService: LogsService,
+    private readonly telegramService: TelegramService,
   ) {}
 
   async approveLive(signalId: string, actor = 'system'): Promise<unknown> {
@@ -94,6 +96,29 @@ export class OrderExecutionService {
       throw new BadRequestException(
         `Insufficient USDT balance: need $${requiredMargin.toFixed(2)}, have $${availableBalance.toFixed(2)}`,
       );
+    }
+
+    // Validate SL/TP prices are still on the correct side of the current market.
+    // If price moved since the signal was created, the Binance SL order will be rejected
+    // (error -4047) which triggers emergency close and marks the trade as failed.
+    const markPrice = await this.binanceService.fetchMarkPrice(sym.symbol).catch(() => null);
+    if (markPrice !== null) {
+      const slInvalid =
+        signal.direction === 'LONG' ? signal.stopLoss >= markPrice : signal.stopLoss <= markPrice;
+      if (slInvalid) {
+        await this.prisma.signal.update({ where: { id: signalId }, data: { status: 'expired' } });
+        throw new BadRequestException(
+          `Signal is stale: stop loss ${signal.stopLoss} is on the wrong side of current mark price ${markPrice}. Signal expired.`,
+        );
+      }
+      const tpInvalid =
+        signal.direction === 'LONG' ? signal.takeProfit1 <= markPrice : signal.takeProfit1 >= markPrice;
+      if (tpInvalid) {
+        await this.prisma.signal.update({ where: { id: signalId }, data: { status: 'expired' } });
+        throw new BadRequestException(
+          `Signal is stale: take profit ${signal.takeProfit1} is on the wrong side of current mark price ${markPrice}. Signal expired.`,
+        );
+      }
     }
 
     await this.binanceService.setLeverage(sym.symbol, signal.leverage);
@@ -288,6 +313,24 @@ export class OrderExecutionService {
       quantity,
       leverage: signal.leverage,
     });
+
+    void this.telegramService
+      .sendTradeExecuted({
+        symbol: sym.symbol,
+        strategy: signal.strategy,
+        direction: signal.direction,
+        entryPrice: fillPrice,
+        stopLoss: signal.stopLoss,
+        takeProfit1: signal.takeProfit1,
+        takeProfit2: signal.takeProfit2,
+        riskReward: signal.riskReward,
+        leverage: signal.leverage,
+        confidenceScore: signal.confidenceScore,
+        hotScore: signal.hotScore,
+        reasons: ((signal.reasonJson as Record<string, unknown>)?.reasons as string[]) ?? [],
+        mode: 'live',
+      })
+      .catch(() => null);
 
     return trade;
   }

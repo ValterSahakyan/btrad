@@ -13,6 +13,7 @@ import { RiskEngineService } from '../risk/risk-engine.service';
 import { ConfidenceScoreService } from '../scoring/confidence-score.service';
 import { StrategyConfig } from '../strategies/strategy.interface';
 import { StrategySelectorService } from '../strategies/strategy-selector.service';
+import { TelegramService } from '../telegram/telegram.service';
 import { HotScoreService } from './hot-score.service';
 
 @Injectable()
@@ -32,6 +33,7 @@ export class ScannerService {
     private readonly confidenceScoreService: ConfidenceScoreService,
     private readonly riskEngineService: RiskEngineService,
     private readonly orderExecutionService: OrderExecutionService,
+    private readonly telegramService: TelegramService,
   ) {
     const connection = new Redis(this.configService.get<string>('redisUrl', 'redis://localhost:6379'), {
       maxRetriesPerRequest: null,
@@ -249,6 +251,25 @@ export class ScannerService {
         signalsCreated += 1;
 
         const autoExecute = settings?.requireDashboardConfirmation === false;
+
+        if (!autoExecute) {
+          void this.telegramService
+            .sendSignal({
+              symbol: symbolRecord.symbol,
+              strategy: candidate.strategy,
+              direction: candidate.direction,
+              entryPrice: candidate.entryPrice,
+              stopLoss: candidate.stopLoss,
+              takeProfit1: candidate.takeProfit1,
+              takeProfit2: candidate.takeProfit2,
+              riskReward: candidate.riskReward,
+              leverage: risk.leverage,
+              confidenceScore,
+              hotScore,
+              reasons: candidate.reasonList,
+            })
+            .catch(() => null);
+        }
 
         if (autoExecute) {
           void this.autoExecute(signal.id).catch(async (err: unknown) => {

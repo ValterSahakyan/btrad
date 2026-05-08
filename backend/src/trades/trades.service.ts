@@ -147,4 +147,30 @@ export class TradesService {
     await this.logsService.audit('trade.close_paper', actor, { tradeId: id, symbol: trade.symbol });
     return updated;
   }
+
+  async clearClosed(): Promise<{ deletedCount: number; message: string }> {
+    const closedStatuses = [
+      'paper_closed', 'live_closed', 'stopped',
+      'take_profit', 'manually_closed', 'failed',
+    ] as const;
+
+    const rows = await this.prisma.trade.findMany({
+      where: { status: { in: [...closedStatuses] } },
+      select: { id: true },
+    });
+    const ids = rows.map((r) => r.id);
+    if (ids.length === 0) return { deletedCount: 0, message: 'No closed trades to clear' };
+
+    // Orders must be deleted first — no cascade configured
+    await this.prisma.order.deleteMany({ where: { tradeId: { in: ids } } });
+    const result = await this.prisma.trade.deleteMany({ where: { id: { in: ids } } });
+
+    await this.logsService.info('trades', 'Closed trades cleared', { count: result.count });
+    await this.logsService.audit('trade.clear_closed', 'system', { count: result.count });
+
+    return {
+      deletedCount: result.count,
+      message: `Cleared ${result.count} closed trade${result.count !== 1 ? 's' : ''}`,
+    };
+  }
 }

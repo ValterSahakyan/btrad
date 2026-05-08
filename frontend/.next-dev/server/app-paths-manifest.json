@@ -1,6 +1,5 @@
 {
   "/settings/page": "app/settings/page.js",
-  "/trades/page": "app/trades/page.js",
   "/signals/page": "app/signals/page.js",
-  "/hot-coins/page": "app/hot-coins/page.js"
+  "/trades/page": "app/trades/page.js"
 }

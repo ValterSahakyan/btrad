@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { Pagination } from '@/components/ui/pagination';
 import { useConfirm } from '@/components/ui/confirm-modal';
 import { cn, currency, number } from '@/lib/utils';
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3333/api';
 const REFRESH_MS = 10_000;
+const PAGE_SIZE = 100;
 
 function dir(d: string) {
   return <span className={`font-mono text-[11px] font-semibold ${d === 'LONG' ? 'text-positive' : 'text-danger'}`}>{d}</span>;
@@ -48,6 +50,8 @@ export default function TradesPage() {
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [closingId, setClosingId] = useState<string | null>(null);
+  const [clearing, setClearing] = useState(false);
+  const [page, setPage] = useState(1);
   const { confirm, modal } = useConfirm();
 
   const fetchTrades = useCallback(async () => {
@@ -67,6 +71,12 @@ export default function TradesPage() {
     const id = setInterval(fetchTrades, REFRESH_MS);
     return () => clearInterval(id);
   }, [fetchTrades]);
+
+  // Reset to page 1 when total count changes significantly
+  useEffect(() => {
+    const totalPages = Math.ceil(trades.length / PAGE_SIZE);
+    if (page > totalPages && totalPages > 0) setPage(1);
+  }, [trades.length, page]);
 
   const handleClose = async (tradeId: string, paper: boolean) => {
     const ok = await confirm({
@@ -89,8 +99,31 @@ export default function TradesPage() {
     }
   };
 
+  const handleClear = async () => {
+    const closedCount = trades.filter((t) => !['live_open', 'paper_open'].includes(t.status)).length;
+    if (closedCount === 0) return;
+    const ok = await confirm({
+      title: 'Clear Closed Trades',
+      message: `Permanently delete ${closedCount} closed trade${closedCount !== 1 ? 's' : ''} (SL, TP, manually closed, failed)? Live and paper open trades are kept. This cannot be undone.`,
+      confirmLabel: 'Clear',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    setClearing(true);
+    try {
+      await fetch(`${API}/trades/cleanup`, { method: 'POST', credentials: 'include' });
+      setPage(1);
+      await fetchTrades();
+    } finally {
+      setClearing(false);
+    }
+  };
+
   const liveOpen = trades.filter((t) => t.status === 'live_open').length;
   const paperOpen = trades.filter((t) => t.status === 'paper_open').length;
+  const closedCount = trades.filter((t) => !['live_open', 'paper_open'].includes(t.status)).length;
+
+  const pageData = trades.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <div className="space-y-3">
@@ -109,6 +142,18 @@ export default function TradesPage() {
         >
           Refresh
         </button>
+        {closedCount > 0 && (
+          <button
+            onClick={handleClear}
+            disabled={clearing}
+            className={cn(
+              'text-[11px] px-2.5 py-1 rounded border cursor-pointer transition-colors',
+              'border-danger/25 text-danger hover:bg-danger/10 disabled:opacity-40',
+            )}
+          >
+            {clearing ? 'Clearing…' : `Clear Closed (${closedCount})`}
+          </button>
+        )}
       </div>
 
       {/* Table */}
@@ -118,67 +163,75 @@ export default function TradesPage() {
         ) : trades.length === 0 ? (
           <div className="py-12 text-center text-[12px] text-dim">No trades yet</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="t-table">
-              <thead>
-                <tr>
-                  {['Symbol', 'Dir', 'Entry', 'Mark / Exit', 'Size', 'Qty', 'Lev', 'Margin', 'PnL', 'PnL %', 'Status', ''].map((h) => (
-                    <th key={h}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {trades.map((t) => {
-                  const isLive = t.status === 'live_open';
-                  const isPaper = t.status === 'paper_open';
-                  const sizePrice = isLive && t.markPrice ? t.markPrice : t.entryPrice;
-                  return (
-                    <tr
-                      key={t.id}
-                      className={cn(
-                        isLive  && 'row-live',
-                        isPaper && 'row-paper',
-                      )}
-                    >
-                      <td className="font-mono font-semibold text-[12px]">{t.symbol}</td>
-                      <td>{dir(t.direction)}</td>
-                      <td className="font-mono text-[12px]">{number(t.entryPrice, 4)}</td>
-                      <td className="font-mono text-[12px]">
-                        {isLive
-                          ? t.markPrice
-                            ? <span className="text-accent">{number(t.markPrice, 4)}</span>
-                            : <span className="text-dim">—</span>
-                          : t.exitPrice
-                            ? number(t.exitPrice, 4)
-                            : <span className="text-dim">—</span>}
-                      </td>
-                      <td className="font-mono text-[12px]">{currency(t.quantity * sizePrice)}</td>
-                      <td className="font-mono text-[11px] text-dim">{number(t.quantity, 4)}</td>
-                      <td className="font-mono text-[11px] text-dim">{t.leverage}×</td>
-                      <td className="font-mono text-[12px] text-dim">{currency(t.margin)}</td>
-                      <td>{pnlCell(t.pnl, isLive)}</td>
-                      <td>{pnlPct(t.pnlPercent)}</td>
-                      <td>{statusBadge(t.status)}</td>
-                      <td>
-                        {(isLive || isPaper) && (
-                          <button
-                            onClick={() => handleClose(t.id, isPaper)}
-                            disabled={closingId === t.id}
-                            className={cn(
-                              'text-[11px] px-2 py-0.5 rounded border cursor-pointer transition-colors',
-                              'border-danger/25 text-danger hover:bg-danger/10 disabled:opacity-40',
-                            )}
-                          >
-                            {closingId === t.id ? '…' : 'Close'}
-                          </button>
+          <>
+            <div className="overflow-x-auto">
+              <table className="t-table">
+                <thead>
+                  <tr>
+                    {['Symbol', 'Dir', 'Entry', 'Mark / Exit', 'Size', 'Qty', 'Lev', 'Margin', 'PnL', 'PnL %', 'Status', ''].map((h) => (
+                      <th key={h}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {pageData.map((t) => {
+                    const isLive = t.status === 'live_open';
+                    const isPaper = t.status === 'paper_open';
+                    const sizePrice = isLive && t.markPrice ? t.markPrice : t.entryPrice;
+                    return (
+                      <tr
+                        key={t.id}
+                        className={cn(
+                          isLive  && 'row-live',
+                          isPaper && 'row-paper',
                         )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                      >
+                        <td className="font-mono font-semibold text-[12px]">{t.symbol}</td>
+                        <td>{dir(t.direction)}</td>
+                        <td className="font-mono text-[12px]">{number(t.entryPrice, 4)}</td>
+                        <td className="font-mono text-[12px]">
+                          {isLive
+                            ? t.markPrice
+                              ? <span className="text-accent">{number(t.markPrice, 4)}</span>
+                              : <span className="text-dim">—</span>
+                            : t.exitPrice
+                              ? number(t.exitPrice, 4)
+                              : <span className="text-dim">—</span>}
+                        </td>
+                        <td className="font-mono text-[12px]">{currency(t.quantity * sizePrice)}</td>
+                        <td className="font-mono text-[11px] text-dim">{number(t.quantity, 4)}</td>
+                        <td className="font-mono text-[11px] text-dim">{t.leverage}×</td>
+                        <td className="font-mono text-[12px] text-dim">{currency(t.margin)}</td>
+                        <td>{pnlCell(t.pnl, isLive)}</td>
+                        <td>{pnlPct(t.pnlPercent)}</td>
+                        <td>{statusBadge(t.status)}</td>
+                        <td>
+                          {(isLive || isPaper) && (
+                            <button
+                              onClick={() => handleClose(t.id, isPaper)}
+                              disabled={closingId === t.id}
+                              className={cn(
+                                'text-[11px] px-2 py-0.5 rounded border cursor-pointer transition-colors',
+                                'border-danger/25 text-danger hover:bg-danger/10 disabled:opacity-40',
+                              )}
+                            >
+                              {closingId === t.id ? '…' : 'Close'}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <Pagination
+              page={page}
+              total={trades.length}
+              pageSize={PAGE_SIZE}
+              onPage={setPage}
+            />
+          </>
         )}
       </div>
     </div>

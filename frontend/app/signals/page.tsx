@@ -1,9 +1,14 @@
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
 import { ActionButton } from '@/components/actions/action-button';
 import { Badge } from '@/components/ui/badge';
+import { Pagination } from '@/components/ui/pagination';
 import { number } from '@/lib/utils';
-import { fetchApiSafe } from '@/services/api';
 
-const ACTIONABLE = new Set(['active', 'pending']);
+const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3333/api';
+const REFRESH_MS = 15_000;
+const PAGE_SIZE = 100;
 
 function dir(d: string) {
   return (
@@ -35,18 +40,47 @@ function sigStatus(s: string) {
   return <Badge tone="neutral">{s}</Badge>;
 }
 
-export default async function SignalsPage() {
-  const [signals, status] = await Promise.all([
-    fetchApiSafe<any[]>('/signals', []),
-    fetchApiSafe<any>('/status', {
-      realTradingEnabled: false, paperTradingEnabled: true,
-      mode: 'testnet', requireDashboardConfirmation: true, executionMode: 'signal_only',
-    }),
-  ]);
+const ACTIONABLE = new Set(['active', 'pending']);
+
+export default function SignalsPage() {
+  const [signals, setSignals] = useState<any[]>([]);
+  const [status, setStatus] = useState<any>({
+    realTradingEnabled: false, paperTradingEnabled: true,
+    mode: 'testnet', requireDashboardConfirmation: true,
+  });
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+
+  const fetchAll = useCallback(async () => {
+    try {
+      const [sigRes, stRes] = await Promise.all([
+        fetch(`${API}/signals`, { credentials: 'include', cache: 'no-store' }),
+        fetch(`${API}/status`, { credentials: 'include', cache: 'no-store' }),
+      ]);
+      if (sigRes.ok) setSignals(await sigRes.json());
+      if (stRes.ok) setStatus(await stRes.json());
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAll();
+    const id = setInterval(fetchAll, REFRESH_MS);
+    return () => clearInterval(id);
+  }, [fetchAll]);
+
+  // Reset to page 1 when total shrinks
+  useEffect(() => {
+    const totalPages = Math.ceil(signals.length / PAGE_SIZE);
+    if (page > totalPages && totalPages > 0) setPage(1);
+  }, [signals.length, page]);
 
   const liveEnabled = status.realTradingEnabled && status.mode === 'live';
   const paperEnabled = status.paperTradingEnabled !== false;
   const autoExec = status.requireDashboardConfirmation === false && liveEnabled;
+
+  const pageData = signals.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <div className="space-y-3">
@@ -76,6 +110,7 @@ export default async function SignalsPage() {
           confirmTitle="Clear Inactive Signals"
           confirmMessage="Delete all skipped, expired, failed, and cancelled signals that have no linked trades? This cannot be undone."
           successMessage="Inactive signals cleared"
+          onSuccess={fetchAll}
         />
       </div>
 
@@ -83,72 +118,87 @@ export default async function SignalsPage() {
       <div className="panel overflow-hidden">
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
           <span className="text-[12px] font-semibold text-white">Signals</span>
-          <span className="font-mono text-[11px] text-dim">{signals.length}</span>
+          <span className="font-mono text-[11px] text-dim">{loading ? '…' : signals.length}</span>
         </div>
-        <div className="overflow-x-auto">
-          <table className="t-table">
-            <thead>
-              <tr>
-                {['Symbol', 'Dir', 'Strategy', 'Score', 'Entry', 'SL', 'TP1', 'TP2', 'R/R', 'Lev', 'Status', 'Actions'].map((h) => (
-                  <th key={h}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {signals.length === 0 && (
-                <tr>
-                  <td colSpan={12} className="py-10 text-center text-dim">No signals</td>
-                </tr>
-              )}
-              {signals.map((sig) => {
-                const canAct = ACTIONABLE.has(sig.status);
-                return (
-                  <tr key={sig.id}>
-                    <td className="font-mono font-medium text-[12px]">{sig.symbol?.symbol ?? sig.symbol}</td>
-                    <td>{dir(sig.direction)}</td>
-                    <td className="text-dim text-[11px] max-w-[120px] truncate">{sig.strategy}</td>
-                    <td>{score(sig.confidenceScore)}</td>
-                    <td className="font-mono text-[12px]">{number(sig.entryPrice, 4)}</td>
-                    <td className="font-mono text-[12px] text-danger">{number(sig.stopLoss, 4)}</td>
-                    <td className="font-mono text-[12px] text-positive">{number(sig.takeProfit1, 4)}</td>
-                    <td className="font-mono text-[12px] text-positive">{number(sig.takeProfit2, 4)}</td>
-                    <td className="font-mono text-[12px]">{number(sig.riskReward)}</td>
-                    <td className="font-mono text-[11px] text-dim">{sig.leverage}×</td>
-                    <td>{sigStatus(sig.status)}</td>
-                    <td>
-                      <div className="flex items-center gap-1.5">
-                        <ActionButton
-                          label="Live"
-                          path={`/signals/${sig.id}/approve-live`}
-                          variant="default"
-                          size="sm"
-                          disabled={!canAct || !liveEnabled}
-                          confirmTitle="Execute Live Order"
-                          confirmMessage={`Place a real Binance Futures ${sig.direction} order for ${sig.symbol?.symbol ?? sig.symbol}? Entry ~${number(sig.entryPrice, 4)}, SL ${number(sig.stopLoss, 4)}, TP ${number(sig.takeProfit1, 4)}.`}
-                          confirmVariant="danger"
-                        />
-                        <ActionButton
-                          label="Paper"
-                          path={`/signals/${sig.id}/approve-paper`}
-                          variant="secondary"
-                          size="sm"
-                          disabled={!canAct || !paperEnabled || autoExec}
-                        />
-                        <ActionButton
-                          label="Skip"
-                          path={`/signals/${sig.id}/skip`}
-                          variant="ghost"
-                          size="sm"
-                          disabled={!canAct}
-                        />
-                      </div>
-                    </td>
+        {loading ? (
+          <div className="py-12 text-center text-[12px] text-dim">Loading…</div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="t-table">
+                <thead>
+                  <tr>
+                    {['Symbol', 'Dir', 'Strategy', 'Score', 'Entry', 'SL', 'TP1', 'TP2', 'R/R', 'Lev', 'Status', 'Actions'].map((h) => (
+                      <th key={h}>{h}</th>
+                    ))}
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody>
+                  {pageData.length === 0 && (
+                    <tr>
+                      <td colSpan={12} className="py-10 text-center text-dim">No signals</td>
+                    </tr>
+                  )}
+                  {pageData.map((sig) => {
+                    const canAct = ACTIONABLE.has(sig.status);
+                    return (
+                      <tr key={sig.id}>
+                        <td className="font-mono font-medium text-[12px]">{sig.symbol?.symbol ?? sig.symbol}</td>
+                        <td>{dir(sig.direction)}</td>
+                        <td className="text-dim text-[11px] max-w-[120px] truncate">{sig.strategy}</td>
+                        <td>{score(sig.confidenceScore)}</td>
+                        <td className="font-mono text-[12px]">{number(sig.entryPrice, 4)}</td>
+                        <td className="font-mono text-[12px] text-danger">{number(sig.stopLoss, 4)}</td>
+                        <td className="font-mono text-[12px] text-positive">{number(sig.takeProfit1, 4)}</td>
+                        <td className="font-mono text-[12px] text-positive">{number(sig.takeProfit2, 4)}</td>
+                        <td className="font-mono text-[12px]">{number(sig.riskReward)}</td>
+                        <td className="font-mono text-[11px] text-dim">{sig.leverage}×</td>
+                        <td>{sigStatus(sig.status)}</td>
+                        <td>
+                          <div className="flex items-center gap-1.5">
+                            <ActionButton
+                              label="Live"
+                              path={`/signals/${sig.id}/approve-live`}
+                              variant="default"
+                              size="sm"
+                              disabled={!canAct || !liveEnabled}
+                              confirmTitle="Execute Live Order"
+                              confirmMessage={`Place a real Binance Futures ${sig.direction} order for ${sig.symbol?.symbol ?? sig.symbol}? Entry ~${number(sig.entryPrice, 4)}, SL ${number(sig.stopLoss, 4)}, TP ${number(sig.takeProfit1, 4)}.`}
+                              confirmVariant="danger"
+                              onSuccess={fetchAll}
+                            />
+                            <ActionButton
+                              label="Paper"
+                              path={`/signals/${sig.id}/approve-paper`}
+                              variant="secondary"
+                              size="sm"
+                              disabled={!canAct || !paperEnabled || autoExec}
+                              onSuccess={fetchAll}
+                            />
+                            <ActionButton
+                              label="Skip"
+                              path={`/signals/${sig.id}/skip`}
+                              variant="ghost"
+                              size="sm"
+                              disabled={!canAct}
+                              onSuccess={fetchAll}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <Pagination
+              page={page}
+              total={signals.length}
+              pageSize={PAGE_SIZE}
+              onPage={setPage}
+            />
+          </>
+        )}
       </div>
     </div>
   );

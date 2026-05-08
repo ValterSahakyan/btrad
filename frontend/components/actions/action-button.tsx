@@ -19,6 +19,7 @@ export function ActionButton({
   confirmTitle,
   confirmVariant,
   successMessage,
+  onSuccess,
 }: {
   label: string;
   path: string;
@@ -31,6 +32,7 @@ export function ActionButton({
   confirmTitle?: string;
   confirmVariant?: 'default' | 'danger';
   successMessage?: string;
+  onSuccess?: () => void;
 }) {
   const [pending, setPending] = useState(false);
   const toast = useToast();
@@ -65,7 +67,11 @@ export function ActionButton({
       } else {
         const data = await res.json().catch(() => ({})) as { message?: string };
         toast.success(data.message ?? successMessage ?? `${label} completed`);
-        startTransition(() => router.refresh());
+        if (onSuccess) {
+          onSuccess();
+        } else {
+          startTransition(() => router.refresh());
+        }
       }
     } catch {
       toast.error('Could not reach backend');
