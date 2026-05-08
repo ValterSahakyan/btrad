@@ -62,15 +62,19 @@ export class TradesService {
     // Cancel only the SL/TP orders that belong to this trade
     const openOrders = trade.orders.filter((o) => o.status === 'open' && o.binanceOrderId);
     for (const order of openOrders) {
-      await this.binanceService
-        .cancelOrder(trade.symbol, order.binanceOrderId!)
-        .catch(async (err) => {
-          await this.logsService.warn('trades', `Failed to cancel order ${order.binanceOrderId}`, {
-            tradeId: id,
-            symbol: trade.symbol,
-            error: err instanceof Error ? err.message : String(err),
-          });
+      const cancelRequest =
+        order.type === 'STOP_MARKET' || order.type === 'TAKE_PROFIT_MARKET'
+          ? this.binanceService.cancelAlgoOrder(order.binanceOrderId!)
+          : this.binanceService.cancelOrder(trade.symbol, order.binanceOrderId!);
+
+      await cancelRequest.catch(async (err) => {
+        await this.logsService.warn('trades', `Failed to cancel order ${order.binanceOrderId}`, {
+          tradeId: id,
+          symbol: trade.symbol,
+          orderType: order.type,
+          error: err instanceof Error ? err.message : String(err),
         });
+      });
     }
 
     await this.prisma.order.updateMany({

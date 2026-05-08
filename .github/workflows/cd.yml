@@ -6,17 +6,17 @@ on:
       - main
   workflow_dispatch:
 
-# Only one deployment runs at a time — never overlap
+# Only one deployment runs at a time; never overlap.
 concurrency:
   group: production
   cancel-in-progress: false
 
 jobs:
-  # ── 1. Run full CI first — never deploy broken code to a live trading bot ──
+  # 1. Run full CI first; never deploy broken code to a live trading bot.
   ci:
     uses: ./.github/workflows/ci.yml
 
-  # ── 2. Deploy to production VPS ───────────────────────────────────────────
+  # 2. Deploy to production VPS.
   deploy:
     needs: ci
     runs-on: ubuntu-latest
@@ -30,34 +30,37 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
+          envs: GITHUB_SHA,GITHUB_REF_NAME
           script: |
             set -e
             cd /var/www/btrad
 
-            # Pull latest code
-            git pull origin main
+            echo "Deploying ref=$GITHUB_REF_NAME sha=$GITHUB_SHA"
 
-            # Install dependencies (all workspaces)
-            npm ci
+            # Deploy the exact commit that triggered this workflow, not just
+            # whichever commit happens to be at the branch tip on the server.
+            git fetch --prune origin
+            git checkout "$GITHUB_REF_NAME"
+            git reset --hard "$GITHUB_SHA"
 
-            # Build backend
-            npm --workspace backend run prisma:generate
-            npm --workspace backend run build
+            CURRENT_SHA=$(git rev-parse HEAD)
+            if [ "$CURRENT_SHA" != "$GITHUB_SHA" ]; then
+              echo "Ref checkout mismatch: expected $GITHUB_SHA got $CURRENT_SHA"
+              exit 1
+            fi
 
-            # Build frontend
-            NEXT_PUBLIC_API_BASE_URL=https://api.yogurtsoftware.info/api \
-              npm --workspace frontend run build
+            # Rebuild Docker images from fresh source with no cache to guarantee
+            # the containers include the deployed commit.
+            docker compose build --no-cache backend frontend
 
-            # Build Docker images from the freshly built source
-            docker compose build backend frontend
-
-            # Restart backend first (runs DB migrations on startup), then frontend
-            # postgres and redis are untouched — no DB downtime
-            docker compose up -d --no-deps backend
+            # Restart backend first (runs DB migrations on startup), then frontend.
+            # --force-recreate ensures the new image is always used even if the
+            # image tag/name is unchanged. Postgres and Redis are untouched.
+            docker compose up -d --no-deps --force-recreate backend
             sleep 15
-            docker compose up -d --no-deps frontend
+            docker compose up -d --no-deps --force-recreate frontend
 
-            # Remove dangling images to free disk space
+            # Remove dangling images to free disk space.
             docker image prune -f
 
-            echo "✅ Deployed $(git rev-parse --short HEAD) to production"
+            echo "Deployed $(git rev-parse --short HEAD) to production"

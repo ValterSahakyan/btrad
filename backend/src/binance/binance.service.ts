@@ -20,6 +20,29 @@ import {
 } from './binance.types';
 import { signQuery } from './binance.utils';
 
+type BinanceStandardOrderResponse = {
+  orderId: number;
+  clientOrderId: string;
+  symbol: string;
+  status: string;
+  side: string;
+  type: string;
+  avgPrice: string;
+  price: string;
+  executedQty: string;
+};
+
+type BinanceAlgoOrderResponse = {
+  algoId: number;
+  clientAlgoId: string;
+  symbol: string;
+  side: string;
+  orderType: string;
+  algoStatus: string;
+  quantity?: string;
+  price?: string;
+};
+
 @Injectable()
 export class BinanceService {
   private readonly testnetHttp: AxiosInstance;
@@ -193,7 +216,36 @@ export class BinanceService {
     const isConditional = input.type === 'STOP_MARKET' || input.type === 'TAKE_PROFIT_MARKET';
     // When closePosition=true, quantity and reduceOnly must be omitted (Binance requirement)
     const useClosePosition = input.closePosition === true;
-    return this.signedRequest<BinanceOrderResult>('POST', '/fapi/v1/order', {
+    if (isConditional) {
+      const response = await this.signedRequest<BinanceAlgoOrderResponse>('POST', '/fapi/v1/algoOrder', {
+        algoType: 'CONDITIONAL',
+        symbol: input.symbol,
+        side: input.side,
+        type: input.type,
+        quantity: useClosePosition ? undefined : input.quantity,
+        price: input.price,
+        triggerPrice: input.stopPrice,
+        reduceOnly: useClosePosition ? undefined : input.reduceOnly,
+        closePosition: useClosePosition ? true : undefined,
+        workingType: input.workingType ?? 'MARK_PRICE',
+        clientAlgoId: input.clientOrderId,
+      });
+
+      return {
+        orderId: String(response.algoId),
+        clientOrderId: response.clientAlgoId,
+        symbol: response.symbol,
+        status: response.algoStatus,
+        side: response.side,
+        type: response.orderType,
+        avgPrice: '0',
+        price: response.price ?? '0',
+        executedQty: response.quantity ?? '0',
+        isAlgoOrder: true,
+      };
+    }
+
+    const response = await this.signedRequest<BinanceStandardOrderResponse>('POST', '/fapi/v1/order', {
       symbol: input.symbol,
       side: input.side,
       type: input.type,
@@ -202,14 +254,33 @@ export class BinanceService {
       stopPrice: input.stopPrice,
       reduceOnly: useClosePosition ? undefined : input.reduceOnly,
       closePosition: useClosePosition ? true : undefined,
-      workingType: isConditional ? 'MARK_PRICE' : undefined,
+      workingType: undefined,
       newClientOrderId: input.clientOrderId,
       timeInForce: input.type === 'LIMIT' ? 'GTC' : undefined,
     });
+
+    return {
+      orderId: String(response.orderId),
+      clientOrderId: response.clientOrderId,
+      symbol: response.symbol,
+      status: response.status,
+      side: response.side,
+      type: response.type,
+      avgPrice: response.avgPrice,
+      price: response.price,
+      executedQty: response.executedQty,
+    };
   }
 
   async cancelOrder(symbol: string, orderId: string): Promise<unknown> {
     return this.signedRequest('DELETE', '/fapi/v1/order', { symbol, orderId });
+  }
+
+  async cancelAlgoOrder(algoId?: string, clientAlgoId?: string): Promise<unknown> {
+    return this.signedRequest('DELETE', '/fapi/v1/algoOrder', {
+      algoId,
+      clientAlgoId,
+    });
   }
 
   async cancelAllOpenOrders(symbol: string): Promise<unknown> {

@@ -42,7 +42,7 @@ export interface PlaceOrderInput {
   symbol: string;
   side: 'BUY' | 'SELL';
   type: 'MARKET' | 'LIMIT' | 'STOP_MARKET' | 'TAKE_PROFIT_MARKET';
-  quantity: number;
+  quantity?: number;
   price?: number;
   stopPrice?: number;
   reduceOnly?: boolean;
@@ -80,7 +80,7 @@ export interface ParsedMarketData {
 }
 
 export interface BinanceOrderResult {
-  orderId: number;
+  orderId: string;
   clientOrderId: string;
   symbol: string;
   status: string;
@@ -89,6 +89,7 @@ export interface BinanceOrderResult {
   avgPrice: string;
   price: string;
   executedQty: string;
+  isAlgoOrder?: boolean;
 }
 
 export interface BinanceIncome {
