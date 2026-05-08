@@ -15,11 +15,11 @@ export async function Header() {
 
   const mode = status?.mode ?? 'testnet';
   const liveEnabled = status?.realTradingEnabled ?? false;
-  const autoApprove = status?.requireDashboardConfirmation === false;
+  const autoExecute = status?.requireDashboardConfirmation === false;
   const paused = status?.botStatus === 'paused';
 
   return (
-    <header className="mb-6 flex flex-col gap-3 rounded-[28px] border border-white/10 bg-white/5 p-5 lg:flex-row lg:items-center lg:justify-between">
+    <header className="app-header mb-6 flex flex-col gap-3 rounded-[28px] border border-white/10 bg-white/5 p-5 lg:flex-row lg:items-center lg:justify-between">
       <div>
         <div className="text-xs uppercase tracking-[0.24em] text-muted">Futures trading console</div>
         <h1 className="text-3xl font-semibold">PerpScout AI</h1>
@@ -31,17 +31,21 @@ export async function Header() {
         )}
       </div>
       <div className="flex flex-wrap gap-2">
-        {paused && <Badge tone="danger">Bot Paused</Badge>}
+        {!status && <Badge tone="danger">Backend Offline</Badge>}
+        {paused ? (
+          <Badge tone="danger">Bot Paused</Badge>
+        ) : (
+          <Badge tone="positive">Bot Running</Badge>
+        )}
         <Badge tone={mode === 'live' ? 'positive' : 'warning'}>
           {mode === 'live' ? 'Live Mode' : 'Testnet Mode'}
         </Badge>
         <Badge tone={liveEnabled ? 'positive' : 'danger'}>
-          {liveEnabled ? 'Live Trading On' : 'Live Disabled'}
+          {liveEnabled ? 'Real Trading ON' : 'Real Trading OFF'}
         </Badge>
-        <Badge tone={autoApprove ? 'warning' : 'positive'}>
-          {autoApprove ? 'Auto-Execute' : 'Manual Approval'}
+        <Badge tone={autoExecute ? 'danger' : 'warning'}>
+          {autoExecute ? 'Auto-Execute ON' : 'Manual Approval'}
         </Badge>
-        {!status && <Badge tone="danger">Backend Offline</Badge>}
       </div>
     </header>
   );

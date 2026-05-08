@@ -1,11 +1,18 @@
-import { Body, Controller, Get, Patch, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Patch, Post, Req } from '@nestjs/common';
+import { Request } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { ScannerService } from '../scanner/scanner.service';
 import { LogsService } from '../logs/logs.service';
 import { MarketRegimeService } from '../market-regime/market-regime.service';
+import { BinanceService } from '../binance/binance.service';
+import { TelegramService } from '../telegram/telegram.service';
+import { UpdateSettingsDto } from './dto/update-settings.dto';
 
 type SnapshotRow = {
   hotScore: number;
+  symbol: {
+    symbol: string;
+  };
 };
 
 type TradePnlRow = {
@@ -25,21 +32,35 @@ export class DashboardController {
     private readonly scannerService: ScannerService,
     private readonly logsService: LogsService,
     private readonly marketRegimeService: MarketRegimeService,
+    private readonly binanceService: BinanceService,
+    private readonly telegramService: TelegramService,
   ) {}
 
   @Get('/status')
   async getStatus() {
     const settings = await this.prisma.botSettings.findFirst();
     const activeSignals = await this.prisma.signal.count({ where: { status: 'active' } });
-    const openTrades = await this.prisma.trade.count({ where: { status: { in: ['paper_open', 'live_open'] } } });
+    const openTrades = await this.prisma.trade.count({ where: { status: 'live_open' } });
+    const openPaperTrades = await this.prisma.trade.count({ where: { status: 'paper_open' } });
+    const executionMode = settings?.realTradingEnabled && settings?.mode === 'live'
+      ? settings.requireDashboardConfirmation === false
+        ? 'live_auto'
+        : 'live_manual'
+      : settings?.paperTradingEnabled === false
+        ? 'signal_only'
+        : 'paper_manual';
     return {
       botStatus: settings?.isPaused ? 'paused' : 'running',
       mode: settings?.mode ?? 'testnet',
       realTradingEnabled: settings?.realTradingEnabled ?? false,
+      enableRealTrading: settings?.realTradingEnabled ?? false,
       paperTradingEnabled: settings?.paperTradingEnabled ?? true,
       requireDashboardConfirmation: settings?.requireDashboardConfirmation ?? true,
+      allowAutoLiveExecution: settings?.requireDashboardConfirmation === false,
+      executionMode,
       activeSignals,
       openTrades,
+      openPaperTrades,
       lastScannerRun: (await this.prisma.botLog.findFirst({
         where: { source: 'scanner', message: 'Completed market scan' },
         orderBy: { createdAt: 'desc' },
@@ -47,77 +68,198 @@ export class DashboardController {
     };
   }
 
+  @Get('/balance')
+  async getBalance() {
+    if (!this.binanceService.hasApiKeys()) {
+      return { futures: null, funding: null, error: 'API keys not configured' };
+    }
+    const settings = await this.prisma.botSettings.findFirst();
+    const mode = settings?.mode ?? 'testnet';
+    try {
+      const balances = mode === 'live'
+        ? await this.binanceService.fetchLiveAccountBalance()
+        : await this.binanceService.fetchAccountBalance();
+      const funding = mode === 'live' ? await this.binanceService.fetchFundingBalance() : null;
+      const usdt = balances.find((b) => b.asset === 'USDT');
+      return {
+        mode,
+        futures: usdt ? Number(usdt.availableBalance) : 0,
+        futuresTotal: usdt ? Number(usdt.balance) : 0,
+        funding,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { futures: null, funding: null, error: message };
+    }
+  }
+
   @Get('/settings')
   async getSettings() {
     const settings = await this.prisma.botSettings.findFirst();
     if (settings) {
-      return settings;
+      return serializeSettings(settings);
     }
 
-    return this.prisma.botSettings.create({ data: {} });
+    const created = await this.prisma.botSettings.create({ data: {} });
+    return serializeSettings(created);
   }
 
   @Patch('/settings')
-  async patchSettings(@Body() body: Record<string, unknown>) {
+  async patchSettings(@Body() body: UpdateSettingsDto, @Req() request: Request) {
     const existing = await this.getSettings();
-    return this.prisma.botSettings.update({
+    validateSettingsConsistency(body);
+    await this.assertNoUnsafeLiveMutation(existing, body);
+    const normalized = normalizeSettingsUpdate(body);
+    const updated = await this.prisma.botSettings.update({
       where: { id: existing.id },
-      data: {
-        mode: body.mode as 'testnet' | 'live' | undefined,
-        isPaused: body.isPaused as boolean | undefined,
-        realTradingEnabled: body.realTradingEnabled as boolean | undefined,
-        requireDashboardConfirmation: body.requireDashboardConfirmation as boolean | undefined,
-        paperTradingEnabled: body.paperTradingEnabled as boolean | undefined,
-        defaultLeverage: body.defaultLeverage as number | undefined,
-        maxLeverage: body.maxLeverage as number | undefined,
-        riskPerTradePercent: body.riskPerTradePercent as number | undefined,
-        maxDailyLossPercent: body.maxDailyLossPercent as number | undefined,
-        maxOpenTrades: body.maxOpenTrades as number | undefined,
-        maxConsecutiveLosses: body.maxConsecutiveLosses as number | undefined,
-        minConfidenceScore: body.minConfidenceScore as number | undefined,
-        minRiskReward: body.minRiskReward as number | undefined,
-        scannerIntervalSeconds: body.scannerIntervalSeconds as number | undefined,
-        signalExpirationMinutes: body.signalExpirationMinutes as number | undefined,
-        maxSymbolsPerScan: body.maxSymbolsPerScan as number | undefined,
-        minHotScoreForScan: body.minHotScoreForScan as number | undefined,
-        // Breakout + Volume
-        breakoutEnabled: body.breakoutEnabled as boolean | undefined,
-        breakoutMinVolumeRatio: body.breakoutMinVolumeRatio as number | undefined,
-        breakoutLookbackPeriod: body.breakoutLookbackPeriod as number | undefined,
-        breakoutMaxSlPercent: body.breakoutMaxSlPercent as number | undefined,
-        breakoutTp1Multiplier: body.breakoutTp1Multiplier as number | undefined,
-        breakoutTp2Multiplier: body.breakoutTp2Multiplier as number | undefined,
-        breakoutMinHotScore: body.breakoutMinHotScore as number | undefined,
-        // Trend Pullback
-        pullbackEnabled: body.pullbackEnabled as boolean | undefined,
-        pullbackRsiLongMin: body.pullbackRsiLongMin as number | undefined,
-        pullbackRsiLongMax: body.pullbackRsiLongMax as number | undefined,
-        pullbackRsiShortMin: body.pullbackRsiShortMin as number | undefined,
-        pullbackRsiShortMax: body.pullbackRsiShortMax as number | undefined,
-        pullbackAtrMultiplier: body.pullbackAtrMultiplier as number | undefined,
-        pullbackMaxSlPercent: body.pullbackMaxSlPercent as number | undefined,
-        pullbackMinHotScore: body.pullbackMinHotScore as number | undefined,
-        // Mean Reversion
-        reversionEnabled: body.reversionEnabled as boolean | undefined,
-        reversionRsiOverbought: body.reversionRsiOverbought as number | undefined,
-        reversionRsiOversold: body.reversionRsiOversold as number | undefined,
-        reversionVwapDeviationPct: body.reversionVwapDeviationPct as number | undefined,
-        reversionVolumeDeclineRatio: body.reversionVolumeDeclineRatio as number | undefined,
-        reversionMaxSlPercent: body.reversionMaxSlPercent as number | undefined,
-      },
+      data: normalized,
     });
+    await this.logsService.audit('settings.updated', getActor(request), {
+      before: existing,
+      changes: normalized,
+      afterId: updated.id,
+    });
+    return serializeSettings(updated);
+  }
+
+  @Post('/settings/apply-micro-account-preset')
+  async applyMicroAccountPreset(@Req() request: Request) {
+    const existing = await this.getSettings();
+    const preset: UpdateSettingsDto = {
+      mode: 'testnet',
+      isPaused: true,
+      enableRealTrading: false,
+      paperTradingEnabled: true,
+      allowAutoLiveExecution: false,
+      defaultLeverage: 3,
+      maxLeverage: 4,
+      riskPerTradePercent: 0.5,
+      maxDailyLossPercent: 2,
+      maxOpenTrades: 1,
+      maxConsecutiveLosses: 2,
+      minPositionUsd: 2,
+      maxPositionUsd: 5,
+      scannerIntervalSeconds: 45,
+      signalExpirationMinutes: 10,
+      maxSymbolsPerScan: 25,
+      minHotScoreForScan: 60,
+      minConfidenceScore: 78,
+      minRiskReward: 1.3,
+      breakoutEnabled: true,
+      breakoutMinVolumeRatio: 1.8,
+      breakoutLookbackPeriod: 20,
+      breakoutMaxSlPercent: 3,
+      breakoutTp1Multiplier: 1.2,
+      breakoutTp2Multiplier: 1.8,
+      breakoutMinHotScore: 62,
+      pullbackEnabled: true,
+      pullbackRsiLongMin: 40,
+      pullbackRsiLongMax: 55,
+      pullbackRsiShortMin: 45,
+      pullbackRsiShortMax: 60,
+      pullbackAtrMultiplier: 1.2,
+      pullbackMaxSlPercent: 3,
+      pullbackMinHotScore: 50,
+      reversionEnabled: false,
+      reversionRsiOverbought: 78,
+      reversionRsiOversold: 22,
+      reversionVwapDeviationPct: 2.5,
+      reversionVolumeDeclineRatio: 0.5,
+      reversionMaxSlPercent: 3,
+    };
+
+    validateSettingsConsistency(preset);
+    await this.assertNoUnsafeLiveMutation(existing, preset);
+
+    const normalized = normalizeSettingsUpdate(preset);
+    const updated = await this.prisma.botSettings.update({
+      where: { id: existing.id },
+      data: normalized,
+    });
+
+    await this.logsService.audit('settings.apply_micro_account_preset', getActor(request), {
+      before: existing,
+      afterId: updated.id,
+      capitalUsd: 43,
+      preset: normalized,
+    });
+
+    return {
+      ...serializeSettings(updated),
+      message: 'Micro-account preset applied for a $43 balance. Bot paused, testnet/manual mode enforced.',
+    };
   }
 
   @Post('/bot/pause')
-  async pauseBot() {
+  async pauseBot(@Req() request: Request) {
     const settings = await this.getSettings();
-    return this.prisma.botSettings.update({ where: { id: settings.id }, data: { isPaused: true } });
+    const updated = await this.prisma.botSettings.update({ where: { id: settings.id }, data: { isPaused: true } });
+    await this.logsService.audit('bot.paused', getActor(request), {});
+    return updated;
+  }
+
+  @Post('/bot/stop')
+  async stopBot(@Req() request: Request) {
+    const settings = await this.getSettings();
+    const updated = await this.prisma.botSettings.update({ where: { id: settings.id }, data: { isPaused: true } });
+    await this.logsService.audit('bot.stopped', getActor(request), {});
+    return {
+      ...updated,
+      message: 'Bot stopped.',
+    };
   }
 
   @Post('/bot/resume')
-  async resumeBot() {
+  async resumeBot(@Req() request: Request) {
     const settings = await this.getSettings();
-    return this.prisma.botSettings.update({ where: { id: settings.id }, data: { isPaused: false } });
+    const updated = await this.prisma.botSettings.update({ where: { id: settings.id }, data: { isPaused: false } });
+    await this.logsService.audit('bot.resumed', getActor(request), {});
+    return updated;
+  }
+
+  @Post('/bot/start')
+  async startBot(@Req() request: Request) {
+    const actor = getActor(request);
+    const settings = await this.getSettings();
+
+    await this.prisma.botSettings.update({ where: { id: settings.id }, data: { isPaused: false } });
+    const sync = await this.scannerService.syncSymbols();
+    const scan = await this.scannerService.runScan();
+
+    await this.logsService.audit('bot.started', actor, {
+      syncImported: sync.imported,
+      scanProcessed: scan.processed,
+      scanSignalsCreated: scan.signalsCreated,
+      scanSkipped: scan.skipped ?? false,
+    });
+
+    return {
+      message: `Bot started. Synced ${sync.imported} symbols and processed ${scan.processed} symbols.`,
+      sync,
+      scan,
+    };
+  }
+
+  @Post('/bot/emergency-stop')
+  async emergencyStop(@Req() request: Request) {
+    const actor = getActor(request);
+    const settings = await this.getSettings();
+    const [updated] = await Promise.all([
+      this.prisma.botSettings.update({ where: { id: settings.id }, data: { isPaused: true } }),
+      this.prisma.signal.updateMany({
+        where: { status: { in: ['active', 'pending', 'approved'] } },
+        data: { status: 'cancelled' },
+      }),
+    ]);
+
+    await this.logsService.audit('bot.emergency_stop', actor, {});
+    await this.logsService.risk('emergency_stop', 'Emergency stop activated; bot paused and pending signals cancelled', 'critical', {
+      actor,
+    });
+    await this.telegramService.sendMessage(
+      `<b>EMERGENCY STOP</b>\nActor: ${actor}\nBot paused and pending signals cancelled.`,
+    );
+    return updated;
   }
 
   @Post('/bot/sync-symbols')
@@ -137,12 +279,19 @@ export class DashboardController {
 
   @Get('/hot-coins')
   async hotCoins() {
-    const latestPerSymbol: SnapshotRow[] = await this.prisma.marketSnapshot.findMany({
+    const snapshots: SnapshotRow[] = await this.prisma.marketSnapshot.findMany({
       include: { symbol: true },
       orderBy: [{ createdAt: 'desc' }],
-      take: 100,
+      take: 2000,
     });
-    return latestPerSymbol.sort((a, b) => b.hotScore - a.hotScore);
+    const latestPerSymbol = new Map<string, SnapshotRow>();
+    for (const snapshot of snapshots) {
+      if (!latestPerSymbol.has(snapshot.symbol.symbol)) {
+        latestPerSymbol.set(snapshot.symbol.symbol, snapshot);
+      }
+      if (latestPerSymbol.size >= 100) break;
+    }
+    return [...latestPerSymbol.values()].sort((a, b) => b.hotScore - a.hotScore);
   }
 
   @Get('/market-regime')
@@ -222,4 +371,95 @@ export class DashboardController {
   riskEvents() {
     return this.logsService.listRiskEvents();
   }
+
+  private async assertNoUnsafeLiveMutation(existing: Record<string, unknown>, body: UpdateSettingsDto): Promise<void> {
+    const openLiveTrades = await this.prisma.trade.count({ where: { status: 'live_open' } });
+    if (openLiveTrades === 0) return;
+
+    const blockedKeys: Array<keyof UpdateSettingsDto> = [
+      'mode',
+      'realTradingEnabled',
+      'enableRealTrading',
+      'defaultLeverage',
+      'maxLeverage',
+      'riskPerTradePercent',
+      'maxDailyLossPercent',
+      'maxOpenTrades',
+      'maxConsecutiveLosses',
+      'minPositionUsd',
+      'maxPositionUsd',
+      'requireDashboardConfirmation',
+      'allowAutoLiveExecution',
+      'paperTradingEnabled',
+    ];
+
+    const attempted = blockedKeys.filter((key) => body[key] !== undefined && body[key] !== existing[key]);
+    if (attempted.length > 0) {
+      throw new BadRequestException(
+        `Cannot modify critical live-trading settings while live trades are open: ${attempted.join(', ')}`,
+      );
+    }
+  }
+}
+
+function validateSettingsConsistency(body: UpdateSettingsDto): void {
+  if (
+    body.maxPositionUsd !== undefined &&
+    body.minPositionUsd !== undefined &&
+    body.maxPositionUsd < body.minPositionUsd
+  ) {
+    throw new BadRequestException('Max position size must be greater than or equal to min position size');
+  }
+
+  if (
+    body.maxLeverage !== undefined &&
+    body.defaultLeverage !== undefined &&
+    body.maxLeverage < body.defaultLeverage
+  ) {
+    throw new BadRequestException('Max leverage must be greater than or equal to default leverage');
+  }
+
+  if (
+    body.pullbackRsiLongMin !== undefined &&
+    body.pullbackRsiLongMax !== undefined &&
+    body.pullbackRsiLongMin > body.pullbackRsiLongMax
+  ) {
+    throw new BadRequestException('Pullback long RSI min must be less than or equal to max');
+  }
+
+  if (
+    body.pullbackRsiShortMin !== undefined &&
+    body.pullbackRsiShortMax !== undefined &&
+    body.pullbackRsiShortMin > body.pullbackRsiShortMax
+  ) {
+    throw new BadRequestException('Pullback short RSI min must be less than or equal to max');
+  }
+}
+
+function getActor(request: Request): string {
+  return ((request as Request & { authAddress?: string }).authAddress ?? 'system').toLowerCase();
+}
+
+function normalizeSettingsUpdate(body: UpdateSettingsDto): UpdateSettingsDto {
+  const normalized: UpdateSettingsDto = { ...body };
+
+  if (body.enableRealTrading !== undefined) {
+    normalized.realTradingEnabled = body.enableRealTrading;
+    delete normalized.enableRealTrading;
+  }
+
+  if (body.allowAutoLiveExecution !== undefined) {
+    normalized.requireDashboardConfirmation = !body.allowAutoLiveExecution;
+    delete normalized.allowAutoLiveExecution;
+  }
+
+  return normalized;
+}
+
+function serializeSettings<T extends { realTradingEnabled: boolean; requireDashboardConfirmation: boolean }>(settings: T) {
+  return {
+    ...settings,
+    enableRealTrading: settings.realTradingEnabled,
+    allowAutoLiveExecution: settings.requireDashboardConfirmation === false,
+  };
 }

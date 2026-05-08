@@ -12,7 +12,6 @@ import { MarketRegimeModule } from './market-regime/market-regime.module';
 import { StrategiesModule } from './strategies/strategies.module';
 import { ScoringModule } from './scoring/scoring.module';
 import { RiskModule } from './risk/risk.module';
-import { PaperTradingModule } from './paper-trading/paper-trading.module';
 import { ExecutionModule } from './execution/execution.module';
 import { ScannerModule } from './scanner/scanner.module';
 import { SignalsModule } from './signals/signals.module';
@@ -20,8 +19,8 @@ import { TradesModule } from './trades/trades.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { AuthModule } from './auth/auth.module';
 import { AuthGuard } from './auth/auth.guard';
-import { TelegramModule } from './telegram/telegram.module';
 import { PositionMonitorModule } from './monitor/position-monitor.module';
+import { TelegramModule } from './telegram/telegram.module';
 
 @Module({
   imports: [
@@ -40,15 +39,14 @@ import { PositionMonitorModule } from './monitor/position-monitor.module';
     StrategiesModule,
     ScoringModule,
     RiskModule,
-    PaperTradingModule,
     ExecutionModule,
     ScannerModule,
     SignalsModule,
     TradesModule,
     DashboardModule,
     AuthModule,
-    TelegramModule,
     PositionMonitorModule,
+    TelegramModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: AuthGuard },

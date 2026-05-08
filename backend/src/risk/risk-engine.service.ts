@@ -30,7 +30,7 @@ export class RiskEngineService {
   }): Promise<RiskValidationResult> {
     const settings = await this.prisma.botSettings.findFirst();
     const openTrades = await this.prisma.trade.count({
-      where: { status: { in: ['paper_open', 'live_open'] } },
+      where: { status: 'live_open' },
     });
     const todayStart = new Date();
     todayStart.setUTCHours(0, 0, 0, 0);
@@ -43,7 +43,9 @@ export class RiskEngineService {
       if (settings?.mode === 'live') throw err;
       return [];
     });
-    const usdtBalance = Number(balanceRows.find((row) => row.asset === 'USDT')?.availableBalance ?? 1000);
+    const rawBalance = Number(balanceRows.find((row) => row.asset === 'USDT')?.availableBalance ?? 0);
+    // In testnet/paper mode use a $10k paper balance when real testnet funds are zero
+    const usdtBalance = rawBalance > 0 ? rawBalance : (settings?.mode === 'live' ? 0 : 10_000);
 
     const riskPerTradePercent = settings?.riskPerTradePercent ?? 1;
     const maxOpenTrades = settings?.maxOpenTrades ?? 2;
@@ -52,6 +54,7 @@ export class RiskEngineService {
     const maxLeverage = settings?.maxLeverage ?? 5;
     const minRiskReward = settings?.minRiskReward ?? 1.5;
     const defaultLeverage = settings?.defaultLeverage ?? 3;
+    const minPositionUsd = settings?.minPositionUsd ?? 3;
 
     const dailyLoss = closedTrades
       .filter((trade) => (trade.pnl ?? 0) < 0)
@@ -60,12 +63,14 @@ export class RiskEngineService {
     const consecutiveLosses = closedTrades.findIndex((trade) => (trade.pnl ?? 0) > 0);
     const effectiveConsecutiveLosses = consecutiveLosses === -1 ? closedTrades.length : consecutiveLosses;
 
+    const maxPositionUsd = settings?.maxPositionUsd ?? 3;
     const positionSize = this.positionSizeService.calculate(
       usdtBalance,
       riskPerTradePercent,
       input.entryPrice,
       input.stopLoss,
       input.stepSize,
+      maxPositionUsd,
     );
 
     const messages: string[] = [];
@@ -77,6 +82,8 @@ export class RiskEngineService {
     if (input.spread > 0.4) messages.push('Spread too high');
     if (input.marketRegime === 'no_trade') messages.push('Market regime blocked');
     if (positionSize.quantity <= 0) messages.push('Invalid position size');
+    const notionalUsd = positionSize.quantity * input.entryPrice;
+    if (positionSize.quantity > 0 && notionalUsd < minPositionUsd) messages.push(`Position notional $${notionalUsd.toFixed(2)} below minimum $${minPositionUsd}`);
 
     const riskScore =
       messages.length === 0

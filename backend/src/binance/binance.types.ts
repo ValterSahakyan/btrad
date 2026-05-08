@@ -59,6 +59,8 @@ export interface BinancePosition {
   symbol: string;
   positionAmt: string;
   entryPrice: string;
+  markPrice: string;
+  unRealizedProfit: string;
   leverage: string;
 }
 

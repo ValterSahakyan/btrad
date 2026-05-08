@@ -1,4 +1,5 @@
-import { Controller, Get, Param, Post } from '@nestjs/common';
+import { Controller, Get, Param, Post, Req } from '@nestjs/common';
+import { Request } from 'express';
 import { TradesService } from './trades.service';
 
 @Controller('/api/trades')
@@ -15,13 +16,17 @@ export class TradesController {
     return this.tradesService.getById(id);
   }
 
-  @Post('/:id/close-paper')
-  closePaper(@Param('id') id: string) {
-    return this.tradesService.closePaper(id);
+  @Post('/:id/close-live')
+  closeLive(@Param('id') id: string, @Req() request: Request) {
+    return this.tradesService.closeLive(id, getActor(request));
   }
 
-  @Post('/:id/close-live')
-  closeLive(@Param('id') id: string) {
-    return this.tradesService.closeLive(id);
+  @Post('/:id/close-paper')
+  closePaper(@Param('id') id: string, @Req() request: Request) {
+    return this.tradesService.closePaper(id, getActor(request));
   }
+}
+
+function getActor(request: Request): string {
+  return ((request as Request & { authAddress?: string }).authAddress ?? 'system').toLowerCase();
 }

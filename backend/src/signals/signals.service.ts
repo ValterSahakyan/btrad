@@ -1,15 +1,17 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { PaperTradingService } from '../paper-trading/paper-trading.service';
 import { OrderExecutionService } from '../execution/order-execution.service';
 import { LogsService } from '../logs/logs.service';
+import { PaperTradingService } from '../paper-trading/paper-trading.service';
 
 @Injectable()
 export class SignalsService {
+  private static readonly CLEANUP_STATUSES = ['skipped', 'expired', 'failed', 'cancelled'] as const;
+
   constructor(
     private readonly prisma: PrismaService,
-    private readonly paperTradingService: PaperTradingService,
     private readonly orderExecutionService: OrderExecutionService,
+    private readonly paperTradingService: PaperTradingService,
     private readonly logsService: LogsService,
   ) {}
 
@@ -32,18 +34,21 @@ export class SignalsService {
     return signal;
   }
 
-  async approvePaper(id: string) {
-    const signal = await this.prisma.signal.findUnique({ where: { id } });
-    if (!signal) throw new NotFoundException('Signal not found');
-    if (signal.expiresAt < new Date()) throw new BadRequestException('Signal has expired');
-    await this.logsService.info('signals', 'Paper trade approved', { signalId: id });
-    await this.prisma.signal.update({ where: { id }, data: { status: 'approved' } });
-    return this.paperTradingService.openFromSignal(id);
+  async approveLive(id: string, actor = 'system') {
+    await this.logsService.warn('signals', 'Live trade approval requested', { signalId: id, actor });
+    await this.logsService.audit('signal.approve_live', actor, { signalId: id });
+    return this.orderExecutionService.approveLive(id, actor);
   }
 
-  async approveLive(id: string) {
-    await this.logsService.warn('signals', 'Live trade approval requested', { signalId: id });
-    return this.orderExecutionService.approveLive(id);
+  async approvePaper(id: string, actor = 'system') {
+    const settings = await this.prisma.botSettings.findFirst();
+    if (settings?.paperTradingEnabled === false) {
+      throw new BadRequestException('Paper trading is disabled in settings');
+    }
+
+    await this.logsService.info('signals', 'Paper trade approval requested', { signalId: id, actor });
+    await this.logsService.audit('signal.approve_paper', actor, { signalId: id });
+    return this.paperTradingService.openFromSignal(id);
   }
 
   async skip(id: string) {
@@ -52,5 +57,39 @@ export class SignalsService {
 
   async cancel(id: string) {
     return this.prisma.signal.update({ where: { id }, data: { status: 'cancelled' } });
+  }
+
+  async cleanupOldSignals(actor = 'system', olderThanDays = 0) {
+    const cutoff = new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000);
+
+    const deleted = await this.prisma.signal.deleteMany({
+      where: {
+        status: { in: [...SignalsService.CLEANUP_STATUSES] },
+        ...(olderThanDays > 0 ? { createdAt: { lt: cutoff } } : {}),
+        trades: { none: {} },
+      },
+    });
+
+    await this.logsService.info('signals', 'Terminal signals cleaned up', {
+      actor,
+      olderThanDays,
+      deletedCount: deleted.count,
+      statuses: [...SignalsService.CLEANUP_STATUSES],
+    });
+    await this.logsService.audit('signal.cleanup_old', actor, {
+      olderThanDays,
+      deletedCount: deleted.count,
+      statuses: [...SignalsService.CLEANUP_STATUSES],
+    });
+
+    return {
+      deletedCount: deleted.count,
+      olderThanDays,
+      statuses: [...SignalsService.CLEANUP_STATUSES],
+      message:
+        olderThanDays > 0
+          ? `Deleted ${deleted.count} terminal signal${deleted.count === 1 ? '' : 's'} older than ${olderThanDays} day${olderThanDays === 1 ? '' : 's'}.`
+          : `Deleted ${deleted.count} terminal signal${deleted.count === 1 ? '' : 's'} with no linked trades.`,
+    };
   }
 }

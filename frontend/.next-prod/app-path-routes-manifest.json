@@ -1,0 +1,14 @@
+{
+  "/_not-found/page": "/_not-found",
+  "/api/auth/clear/route": "/api/auth/clear",
+  "/icon.svg/route": "/icon.svg",
+  "/hot-coins/page": "/hot-coins",
+  "/login/page": "/login",
+  "/logs/page": "/logs",
+  "/overview/page": "/overview",
+  "/page": "/",
+  "/performance/page": "/performance",
+  "/signals/page": "/signals",
+  "/settings/page": "/settings",
+  "/trades/page": "/trades"
+}

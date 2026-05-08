@@ -8,19 +8,18 @@ import { average, stdDev } from '../common/utils/math';
 import { OrderExecutionService } from '../execution/order-execution.service';
 import { LogsService } from '../logs/logs.service';
 import { MarketRegimeService } from '../market-regime/market-regime.service';
-import { PaperTradingService } from '../paper-trading/paper-trading.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RiskEngineService } from '../risk/risk-engine.service';
 import { ConfidenceScoreService } from '../scoring/confidence-score.service';
 import { StrategyConfig } from '../strategies/strategy.interface';
 import { StrategySelectorService } from '../strategies/strategy-selector.service';
-import { TelegramService } from '../telegram/telegram.service';
 import { HotScoreService } from './hot-score.service';
 
 @Injectable()
 export class ScannerService {
   readonly queue: Queue;
   private scanning = false;
+  private readonly redis: Redis;
 
   constructor(
     private readonly configService: ConfigService,
@@ -32,13 +31,12 @@ export class ScannerService {
     private readonly strategySelectorService: StrategySelectorService,
     private readonly confidenceScoreService: ConfidenceScoreService,
     private readonly riskEngineService: RiskEngineService,
-    private readonly telegramService: TelegramService,
-    private readonly paperTradingService: PaperTradingService,
     private readonly orderExecutionService: OrderExecutionService,
   ) {
     const connection = new Redis(this.configService.get<string>('redisUrl', 'redis://localhost:6379'), {
       maxRetriesPerRequest: null,
     });
+    this.redis = connection;
     this.queue = new Queue('scanner', { connection });
   }
 
@@ -47,7 +45,14 @@ export class ScannerService {
   }
 
   async runScan(): Promise<{ processed: number; signalsCreated: number; skipped?: boolean }> {
+    const lockToken = randomToken();
+    const acquired = await this.redis.set('scanner:run-lock', lockToken, 'PX', 5 * 60_000, 'NX');
+    if (!acquired) {
+      return { processed: 0, signalsCreated: 0, skipped: true };
+    }
+
     if (this.scanning) {
+      await this.releaseLock(lockToken);
       return { processed: 0, signalsCreated: 0, skipped: true };
     }
     this.scanning = true;
@@ -55,12 +60,16 @@ export class ScannerService {
       return await this._runScan();
     } finally {
       this.scanning = false;
+      await this.releaseLock(lockToken);
     }
   }
 
   private async _runScan(): Promise<{ processed: number; signalsCreated: number }> {
-    await this.logsService.info('scanner', 'Starting market scan');
     const settings = await this.prisma.botSettings.findFirst();
+    if (settings?.isPaused) {
+      return { processed: 0, signalsCreated: 0 };
+    }
+    await this.logsService.info('scanner', 'Starting market scan');
     const regime = await this.marketRegimeService.getRegime();
 
     const maxSymbols = settings?.maxSymbolsPerScan ?? 50;
@@ -178,7 +187,7 @@ export class ScannerService {
 
         // Skip if already have an open trade for this symbol
         const existingTrade = await this.prisma.trade.findFirst({
-          where: { symbol: symbolRecord.symbol, status: { in: ['paper_open', 'live_open'] } },
+          where: { symbol: symbolRecord.symbol, status: 'live_open' },
         });
         if (existingTrade) continue;
 
@@ -224,32 +233,14 @@ export class ScannerService {
         signalsCreated += 1;
 
         const autoExecute = settings?.requireDashboardConfirmation === false;
-        const mode = settings?.mode ?? 'paper';
 
         if (autoExecute) {
-          void this.autoExecute(signal.id, mode).catch(() => {});
-        }
-
-        // Send appropriate Telegram notification
-        const telegramPayload = {
-          symbol: symbolRecord.symbol,
-          strategy: candidate.strategy,
-          direction: candidate.direction,
-          entryPrice: candidate.entryPrice,
-          stopLoss: candidate.stopLoss,
-          takeProfit1: candidate.takeProfit1,
-          takeProfit2: candidate.takeProfit2,
-          riskReward: candidate.riskReward,
-          leverage: risk.leverage,
-          confidenceScore,
-          hotScore,
-          reasons: candidate.reasonList,
-        };
-
-        if (autoExecute) {
-          void this.telegramService.sendTradeExecuted({ ...telegramPayload, mode }).catch(() => {});
-        } else {
-          void this.telegramService.sendSignal(telegramPayload).catch(() => {});
+          void this.autoExecute(signal.id).catch(async (err: unknown) => {
+            await this.logsService.error('scanner', `Auto-execute failed for ${symbolRecord.symbol}`, {
+              signalId: signal.id,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          });
         }
       } catch (err) {
         await this.logsService.warn('scanner', `Symbol scan failed: ${symbolRecord.symbol}`, {
@@ -262,12 +253,17 @@ export class ScannerService {
     return { processed, signalsCreated };
   }
 
-  private async autoExecute(signalId: string, mode: string): Promise<void> {
-    if (mode === 'live') {
-      await this.orderExecutionService.approveLive(signalId);
-    } else {
-      await this.paperTradingService.openFromSignal(signalId);
-    }
+  private async autoExecute(signalId: string): Promise<void> {
+    await this.orderExecutionService.approveLive(signalId);
+  }
+
+  private async releaseLock(token: string): Promise<void> {
+    await this.redis.eval(
+      "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+      1,
+      'scanner:run-lock',
+      token,
+    );
   }
 
   async syncSymbols(): Promise<{ imported: number }> {
@@ -289,6 +285,10 @@ export class ScannerService {
 
     return { imported };
   }
+}
+
+function randomToken(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 function buildStrategyConfig(settings: Record<string, unknown> | null): StrategyConfig {

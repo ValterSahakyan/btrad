@@ -1,7 +1,7 @@
-import crypto from 'crypto';
+import { createHmac } from 'crypto';
 
 export const signQuery = (queryString: string, secret: string): string =>
-  crypto.createHmac('sha256', secret).update(queryString).digest('hex');
+  createHmac('sha256', secret).update(queryString).digest('hex');
 
 export const toFixedStep = (value: number, step: number, precision: number): number => {
   const stepped = Math.floor(value / step) * step;

@@ -4,10 +4,23 @@
 
 :root {
   color-scheme: dark;
+  --surface: #07111f;
+  --panel: #0e1b2d;
+  --accent: #2dd4bf;
+  --danger: #f97316;
+  --positive: #22c55e;
+  --muted: #7c8aa5;
+}
+
+html {
+  background: #040c17;
 }
 
 body {
   @apply bg-surface text-white antialiased;
+  margin: 0;
+  color: #fff;
+  font-family: ui-sans-serif, system-ui, sans-serif;
   background-image:
     radial-gradient(circle at top left, rgba(45, 212, 191, 0.18), transparent 28%),
     radial-gradient(circle at top right, rgba(249, 115, 22, 0.16), transparent 22%),
@@ -16,4 +29,126 @@ body {
 
 a {
   @apply text-inherit no-underline;
+}
+
+select option {
+  background-color: #0d1117;
+  color: #ffffff;
+}
+
+.app-body {
+  min-height: 100vh;
+}
+
+.app-shell {
+  display: flex;
+  gap: 1.5rem;
+  min-height: 100vh;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 1.25rem;
+}
+
+.app-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.app-sidebar,
+.app-header,
+.app-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 28px;
+  background: rgba(9, 21, 39, 0.78);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.22);
+}
+
+.app-sidebar {
+  width: 100%;
+  max-width: 18rem;
+  padding: 1rem;
+}
+
+.app-sidebar-brand {
+  padding: 1rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.app-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.app-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+
+.app-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding: 1.25rem;
+}
+
+.app-card {
+  padding: 1.25rem;
+}
+
+.app-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.app-table th,
+.app-table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  text-align: left;
+}
+
+.app-table th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.app-button,
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.app-button,
+button {
+  border: 0;
+  border-radius: 0.9rem;
+}
+
+input,
+select,
+textarea {
+  color: #fff;
+}
+
+@media (max-width: 1024px) {
+  .app-shell {
+    flex-direction: column;
+  }
+
+  .app-sidebar {
+    max-width: none;
+  }
 }

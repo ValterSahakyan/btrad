@@ -22,6 +22,17 @@ export class LogsService {
     await this.prisma.riskEvent.create({ data: { type, message, severity, metadataJson: metadataJson as Prisma.InputJsonValue } });
   }
 
+  async audit(action: string, actor: string, metadataJson: object = {}): Promise<void> {
+    await this.prisma.botLog.create({
+      data: {
+        level: 'info',
+        source: 'audit',
+        message: action,
+        metadataJson: { actor, ...metadataJson } as Prisma.InputJsonValue,
+      },
+    });
+  }
+
   async listLogs(limit = 100): Promise<unknown[]> {
     return this.prisma.botLog.findMany({ orderBy: { createdAt: 'desc' }, take: limit });
   }

@@ -7,6 +7,7 @@ describe('PaperTradingService', () => {
       trade: {
         findUnique: jest.fn().mockResolvedValue({
           id: 'trade-1',
+          status: 'paper_open',
           direction: 'LONG',
           entryPrice: 100,
           quantity: 2,

@@ -8,9 +8,9 @@ This software is not financial advice. Use at your own risk. Start with Testnet.
 
 Futures trading is high-risk. The default mode is `testnet`, real trading is disabled by default, and live execution requires all of the following:
 
-- `ENABLE_REAL_TRADING=true`
-- `BINANCE_MODE=live`
-- Manual approval from the dashboard
+- `mode=live` in dashboard settings
+- `ENABLE_REAL_TRADING` enabled in dashboard settings
+- Manual approval from the dashboard unless `ALLOW_AUTO_LIVE_EXECUTION` is enabled in dashboard settings
 - Passing risk checks
 - Trading not paused
 - Daily loss limit not reached
@@ -48,7 +48,7 @@ Never use Binance API withdrawal permission. Enable read permission and futures 
 2. Keep withdrawal permission disabled.
 3. Enable read and futures trading permissions only.
 4. Add IP whitelist rules before moving beyond local testing.
-5. Set `BINANCE_MODE=testnet` and `ENABLE_REAL_TRADING=false`.
+5. Keep dashboard settings on `mode=testnet` and `ENABLE_REAL_TRADING=false`.
 
 ## Binance API Key Setup
 
@@ -154,9 +154,9 @@ Order execution is manual by design in the MVP. Signals must be approved from th
 ## Safely Switch To Live Mode
 
 1. Validate signals in testnet and paper mode first.
-2. Set `ENABLE_REAL_TRADING=true`.
-3. Set `BINANCE_MODE=live`.
-4. Restart the backend.
+2. Set `ENABLE_REAL_TRADING=true` in dashboard settings.
+3. Set `mode=live` in dashboard settings.
+4. Keep `ALLOW_AUTO_LIVE_EXECUTION=false` unless you intentionally want automatic live execution.
 5. Verify dashboard warnings and risk rules.
 6. Use small capital only after repeated successful dry runs.
 

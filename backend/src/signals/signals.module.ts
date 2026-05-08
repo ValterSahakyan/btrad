@@ -6,7 +6,7 @@ import { SignalsController } from './signals.controller';
 import { SignalsService } from './signals.service';
 
 @Module({
-  imports: [PaperTradingModule, ExecutionModule, LogsModule],
+  imports: [ExecutionModule, LogsModule, PaperTradingModule],
   controllers: [SignalsController],
   providers: [SignalsService],
   exports: [SignalsService],

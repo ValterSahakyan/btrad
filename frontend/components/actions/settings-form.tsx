@@ -4,14 +4,16 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
+import { ToastContainer } from '../ui/toast';
+import { useToast } from '@/hooks/use-toast';
 
 type SettingsState = {
   // General
   mode: 'testnet' | 'live';
   isPaused: boolean;
-  realTradingEnabled: boolean;
-  requireDashboardConfirmation: boolean;
+  enableRealTrading: boolean;
   paperTradingEnabled: boolean;
+  allowAutoLiveExecution: boolean;
   // Risk
   defaultLeverage: number;
   maxLeverage: number;
@@ -19,6 +21,8 @@ type SettingsState = {
   maxDailyLossPercent: number;
   maxOpenTrades: number;
   maxConsecutiveLosses: number;
+  minPositionUsd: number;
+  maxPositionUsd: number;
   // Scanner
   scannerIntervalSeconds: number;
   signalExpirationMinutes: number;
@@ -64,9 +68,9 @@ const SECTIONS: Section[] = [
     fields: [
       { key: 'mode', label: 'Mode' },
       { key: 'isPaused', label: 'Bot Paused' },
-      { key: 'realTradingEnabled', label: 'Real Trading Enabled' },
-      { key: 'requireDashboardConfirmation', label: 'Require Dashboard Confirmation' },
+      { key: 'enableRealTrading', label: 'ENABLE_REAL_TRADING' },
       { key: 'paperTradingEnabled', label: 'Paper Trading Enabled' },
+      { key: 'allowAutoLiveExecution', label: 'ALLOW_AUTO_LIVE_EXECUTION' },
     ],
   },
   {
@@ -78,6 +82,8 @@ const SECTIONS: Section[] = [
       { key: 'maxDailyLossPercent', label: 'Max Daily Loss', unit: '%' },
       { key: 'maxOpenTrades', label: 'Max Open Trades' },
       { key: 'maxConsecutiveLosses', label: 'Max Consecutive Losses' },
+      { key: 'maxPositionUsd', label: 'Max Position Size', unit: 'USD' },
+      { key: 'minPositionUsd', label: 'Min Position Size', unit: 'USD' },
     ],
   },
   {
@@ -133,7 +139,7 @@ const SECTIONS: Section[] = [
 ];
 
 const BOOLEAN_KEYS = new Set<string>([
-  'isPaused', 'realTradingEnabled', 'requireDashboardConfirmation', 'paperTradingEnabled',
+  'isPaused', 'enableRealTrading', 'paperTradingEnabled', 'allowAutoLiveExecution',
   'breakoutEnabled', 'pullbackEnabled', 'reversionEnabled',
 ]);
 
@@ -141,15 +147,17 @@ export function SettingsForm({ settings }: { settings: any }) {
   const [form, setForm] = useState<SettingsState>({
     mode: settings.mode ?? 'testnet',
     isPaused: settings.isPaused ?? false,
-    realTradingEnabled: settings.realTradingEnabled ?? false,
-    requireDashboardConfirmation: settings.requireDashboardConfirmation ?? true,
+    enableRealTrading: settings.enableRealTrading ?? settings.realTradingEnabled ?? false,
     paperTradingEnabled: settings.paperTradingEnabled ?? true,
+    allowAutoLiveExecution: settings.allowAutoLiveExecution ?? (settings.requireDashboardConfirmation === false),
     defaultLeverage: settings.defaultLeverage ?? 3,
     maxLeverage: settings.maxLeverage ?? 5,
     riskPerTradePercent: settings.riskPerTradePercent ?? 1,
     maxDailyLossPercent: settings.maxDailyLossPercent ?? 3,
     maxOpenTrades: settings.maxOpenTrades ?? 2,
     maxConsecutiveLosses: settings.maxConsecutiveLosses ?? 3,
+    maxPositionUsd: settings.maxPositionUsd ?? 3,
+    minPositionUsd: settings.minPositionUsd ?? 1,
     minConfidenceScore: settings.minConfidenceScore ?? 70,
     minRiskReward: settings.minRiskReward ?? 1.5,
     scannerIntervalSeconds: settings.scannerIntervalSeconds ?? 60,
@@ -184,26 +192,60 @@ export function SettingsForm({ settings }: { settings: any }) {
 
   const [isPending, setPending] = useState(false);
   const router = useRouter();
+  const toast = useToast();
 
-  const inputClass = 'w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white text-sm';
+  const inputClass =
+    'w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white text-sm outline-none transition ' +
+    'focus:border-teal-400/60 focus:bg-white/8 hover:border-white/20 placeholder:text-white/30';
+
+  const selectClass =
+    'w-full appearance-none rounded-xl border border-white/10 bg-white/5 pl-3 pr-8 py-2 text-white text-sm outline-none transition ' +
+    'focus:border-teal-400/60 focus:bg-white/8 hover:border-white/20 cursor-pointer';
+
+  const SelectField = ({
+    value,
+    onChange,
+    options,
+  }: {
+    value: string;
+    onChange: (v: string) => void;
+    options: { value: string; label: string }[];
+  }) => (
+    <div className="relative">
+      <select className={selectClass} value={value} onChange={(e) => onChange(e.target.value)}>
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+      <svg
+        className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-white/40"
+        width="14" height="14" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+      >
+        <polyline points="6 9 12 15 18 9" />
+      </svg>
+    </div>
+  );
 
   const renderField = (key: keyof SettingsState, label: string, unit?: string) => {
     const value = form[key];
     return (
       <label key={key} className="space-y-1 text-sm">
-        <div className="text-muted">
+        <div className="text-white/50">
           {label}{unit ? <span className="ml-1 text-xs opacity-50">({unit})</span> : null}
         </div>
         {key === 'mode' ? (
-          <select className={inputClass} value={value as string} onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value as 'testnet' | 'live' }))}>
-            <option value="testnet">testnet</option>
-            <option value="live">live</option>
-          </select>
+          <SelectField
+            value={value as string}
+            onChange={(v) => setForm((f) => ({ ...f, [key]: v as 'testnet' | 'live' }))}
+            options={[{ value: 'testnet', label: 'Testnet' }, { value: 'live', label: 'Live' }]}
+          />
         ) : BOOLEAN_KEYS.has(key) ? (
-          <select className={inputClass} value={String(value)} onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value === 'true' }))}>
-            <option value="true">true</option>
-            <option value="false">false</option>
-          </select>
+          <SelectField
+            value={String(value)}
+            onChange={(v) => setForm((f) => ({ ...f, [key]: v === 'true' }))}
+            options={[{ value: 'true', label: 'Enabled' }, { value: 'false', label: 'Disabled' }]}
+          />
         ) : (
           <input
             className={inputClass}
@@ -236,13 +278,21 @@ export function SettingsForm({ settings }: { settings: any }) {
           onClick={async () => {
             setPending(true);
             try {
-              await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3000/api'}/settings`, {
+              const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3333/api'}/settings`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(form),
                 credentials: 'include',
               });
-              router.refresh();
+              if (!res.ok) {
+                const body = await res.json().catch(() => ({})) as { message?: string };
+                toast.error(body.message ?? `Save failed (${res.status})`);
+              } else {
+                toast.success('Settings saved');
+                router.refresh();
+              }
+            } catch {
+              toast.error('Could not reach backend');
             } finally {
               setPending(false);
             }
@@ -252,6 +302,8 @@ export function SettingsForm({ settings }: { settings: any }) {
           {isPending ? 'Saving...' : 'Save All Settings'}
         </Button>
       </div>
+
+      <ToastContainer toasts={toast.toasts} onDismiss={toast.dismiss} />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import type { NextConfig } from 'next';
+import { PHASE_DEVELOPMENT_SERVER } from 'next/constants';
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3000';
+const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3333';
 
 const securityHeaders = [
   { key: 'X-DNS-Prefetch-Control', value: 'on' },
@@ -22,11 +23,12 @@ const securityHeaders = [
   },
 ];
 
-const nextConfig: NextConfig = {
-  typedRoutes: true,
-  async headers() {
-    return [{ source: '/(.*)', headers: securityHeaders }];
-  },
-};
-
-export default nextConfig;
+export default function nextConfig(phase: string): NextConfig {
+  return {
+    typedRoutes: true,
+    distDir: phase === PHASE_DEVELOPMENT_SERVER ? '.next-dev' : '.next-prod',
+    async headers() {
+      return [{ source: '/(.*)', headers: securityHeaders }];
+    },
+  };
+}

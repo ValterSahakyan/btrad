@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "BotSettings" ADD COLUMN     "minPositionUsd" DOUBLE PRECISION NOT NULL DEFAULT 3;

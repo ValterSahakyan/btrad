@@ -27,6 +27,8 @@ export class BinanceService {
   private readonly apiKey: string;
   private readonly apiSecret: string;
 
+  private readonly mainHttp: AxiosInstance;
+
   constructor(
     private readonly configService: ConfigService,
     private readonly logsService: LogsService,
@@ -34,6 +36,7 @@ export class BinanceService {
   ) {
     this.testnetHttp = axios.create({ baseURL: 'https://testnet.binancefuture.com', timeout: 10000 });
     this.liveHttp = axios.create({ baseURL: 'https://fapi.binance.com', timeout: 10000 });
+    this.mainHttp = axios.create({ baseURL: 'https://api.binance.com', timeout: 10000 });
     this.apiKey = this.configService.get<string>('binanceApiKey', '');
     this.apiSecret = this.configService.get<string>('binanceApiSecret', '');
   }
@@ -45,8 +48,8 @@ export class BinanceService {
 
   private async get<T>(url: string, params: Record<string, unknown> = {}): Promise<T> {
     try {
-      const http = await this.getHttp();
-      const { data } = await http.get<T>(url, { params });
+      // Always use live Binance for market data — testnet has synthetic/fake volumes
+      const { data } = await this.liveHttp.get<T>(url, { params });
       return data;
     } catch (error) {
       throw this.handleError(error);
@@ -59,8 +62,13 @@ export class BinanceService {
     params: Record<string, unknown> = {},
   ): Promise<T> {
     const timestamp = Date.now();
+    // Strip undefined values — Axios excludes them from the request, so the
+    // signature must be computed over the same set of params Axios will actually send.
+    const cleanParams = Object.fromEntries(
+      Object.entries({ ...params, timestamp }).filter(([, v]) => v !== undefined),
+    );
     const query = new URLSearchParams(
-      Object.entries({ ...params, timestamp }).map(([key, value]) => [key, String(value)]),
+      Object.entries(cleanParams).map(([key, value]) => [key, String(value)]),
     ).toString();
     const signature = signQuery(query, this.apiSecret);
 
@@ -69,7 +77,7 @@ export class BinanceService {
       const { data } = await http.request<T>({
         method,
         url,
-        params: { ...params, timestamp, signature },
+        params: { ...cleanParams, signature },
         headers: { 'X-MBX-APIKEY': this.apiKey },
       });
 
@@ -132,6 +140,40 @@ export class BinanceService {
 
   async fetchAccountBalance(): Promise<BinanceAccountBalance[]> {
     return this.signedRequest('GET', '/fapi/v2/balance');
+  }
+
+  async fetchLiveAccountBalance(): Promise<BinanceAccountBalance[]> {
+    const timestamp = Date.now();
+    const query = new URLSearchParams(
+      Object.entries({ timestamp }).map(([k, v]) => [k, String(v)]),
+    ).toString();
+    const signature = signQuery(query, this.apiSecret);
+    try {
+      const { data } = await this.liveHttp.get<BinanceAccountBalance[]>('/fapi/v2/balance', {
+        params: { timestamp, signature },
+        headers: { 'X-MBX-APIKEY': this.apiKey },
+      });
+      return data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  async fetchFundingBalance(): Promise<number> {
+    const timestamp = Date.now();
+    const query = new URLSearchParams({ timestamp: String(timestamp) }).toString();
+    const signature = signQuery(query, this.apiSecret);
+    try {
+      const { data } = await this.mainHttp.post<{ asset: string; free: string }[]>(
+        '/sapi/v1/asset/get-funding-asset',
+        null,
+        { params: { timestamp, signature }, headers: { 'X-MBX-APIKEY': this.apiKey } },
+      );
+      const usdt = data.find((a) => a.asset === 'USDT');
+      return usdt ? Number(usdt.free) : 0;
+    } catch {
+      return 0;
+    }
   }
 
   async fetchOpenPositions(): Promise<BinancePosition[]> {

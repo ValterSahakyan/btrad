@@ -9,17 +9,42 @@ import { PrismaService } from '../prisma/prisma.service';
 export class TradesService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly paperTradingService: PaperTradingService,
     private readonly binanceService: BinanceService,
+    private readonly paperTradingService: PaperTradingService,
     private readonly logsService: LogsService,
   ) {}
 
   async list() {
-    return this.prisma.trade.findMany({
+    const trades = await this.prisma.trade.findMany({
       include: { signal: true, orders: true },
       orderBy: { createdAt: 'desc' },
       take: 200,
     });
+
+    const openTrades = trades.filter((t) => t.status === 'live_open');
+    if (openTrades.length === 0) return trades;
+
+    // Overlay live unrealized PnL from Binance for open positions
+    try {
+      const positions = await this.binanceService.fetchOpenPositions();
+      const posMap = new Map(positions.map((p) => [p.symbol, p]));
+
+      return trades.map((trade) => {
+        if (trade.status !== 'live_open') return trade;
+        const pos = posMap.get(trade.symbol);
+        if (!pos) return trade;
+        const unrealizedPnl = Number(pos.unRealizedProfit);
+        const pnlPercent = trade.margin > 0 ? (unrealizedPnl / trade.margin) * 100 : 0;
+        return {
+          ...trade,
+          pnl: unrealizedPnl,
+          pnlPercent,
+          markPrice: Number(pos.markPrice),
+        };
+      });
+    } catch {
+      return trades;
+    }
   }
 
   async getById(id: string) {
@@ -31,17 +56,12 @@ export class TradesService {
     return trade;
   }
 
-  async closePaper(id: string) {
-    return this.paperTradingService.closeTrade(id);
-  }
-
-  async closeLive(id: string) {
+  async closeLive(id: string, actor = 'system') {
     const trade = await this.prisma.trade.findUnique({ where: { id }, include: { orders: true } });
     if (!trade) throw new NotFoundException('Trade not found');
     if (trade.status !== 'live_open') throw new NotFoundException('Trade is not open');
 
-    // Cancel only the SL/TP orders that belong to THIS trade.
-    // Never use cancelAllOpenOrders — that would wipe orders from other trades on the same symbol.
+    // Cancel only the SL/TP orders that belong to this trade
     const openOrders = trade.orders.filter((o) => o.status === 'open' && o.binanceOrderId);
     for (const order of openOrders) {
       await this.binanceService
@@ -55,7 +75,6 @@ export class TradesService {
         });
     }
 
-    // Mark those orders as cancelled in DB
     await this.prisma.order.updateMany({
       where: { tradeId: id, status: 'open' },
       data: { status: 'cancelled' },
@@ -73,7 +92,6 @@ export class TradesService {
       clientOrderId: `${id.slice(0, 8)}-close-${ts}`,
     });
 
-    // Use actual fill price from Binance; fall back to mark price only if avgPrice is missing
     const fillPrice = Number(closeResult.avgPrice);
     const exitPrice = fillPrice > 0 ? fillPrice : await this.binanceService.fetchMarkPrice(trade.symbol);
 
@@ -112,7 +130,21 @@ export class TradesService {
       exitPrice,
       pnl,
     });
+    await this.logsService.audit('trade.close_live', actor, { tradeId: id, symbol: trade.symbol });
 
+    return updated;
+  }
+
+  async closePaper(id: string, actor = 'system') {
+    const trade = await this.prisma.trade.findUnique({ where: { id } });
+    if (!trade) throw new NotFoundException('Trade not found');
+
+    const updated = await this.paperTradingService.closeTrade(id);
+    await this.logsService.info('trades', 'Paper trade closed', {
+      tradeId: id,
+      symbol: trade.symbol,
+    });
+    await this.logsService.audit('trade.close_paper', actor, { tradeId: id, symbol: trade.symbol });
     return updated;
   }
 }

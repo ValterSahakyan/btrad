@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3001",
-    "build": "next build",
-    "start": "next start -p 3001",
+    "build": "next build && node scripts/fix-next-server-chunks.js",
+    "start": "node scripts/fix-next-server-chunks.js && next start -p 3001",
     "test": "echo \"No frontend tests configured yet\""
   },
   "dependencies": {

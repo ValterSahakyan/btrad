@@ -6,7 +6,7 @@ import { TradesController } from './trades.controller';
 import { TradesService } from './trades.service';
 
 @Module({
-  imports: [PaperTradingModule, BinanceModule, LogsModule],
+  imports: [BinanceModule, LogsModule, PaperTradingModule],
   controllers: [TradesController],
   providers: [TradesService],
   exports: [TradesService],

@@ -1,65 +1,75 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import { BinanceService } from '../binance/binance.service';
 import { LogsService } from '../logs/logs.service';
-import { PaperTradingService } from '../paper-trading/paper-trading.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { TelegramService } from '../telegram/telegram.service';
 
 @Injectable()
-export class PositionMonitorService {
+export class PositionMonitorService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly binanceService: BinanceService,
-    private readonly paperTradingService: PaperTradingService,
     private readonly logsService: LogsService,
+    private readonly telegramService: TelegramService,
   ) {}
+
+  onModuleInit(): void {
+    void this.reconcileStartupState();
+  }
 
   async run(): Promise<void> {
     await Promise.all([
-      this.monitorPaperTrades(),
       this.monitorLiveTrades(),
       this.expireStaleSignals(),
     ]);
   }
 
-  private async monitorPaperTrades(): Promise<void> {
-    const openTrades = await this.prisma.trade.findMany({
-      where: { status: 'paper_open' },
-      include: { signal: true },
-    });
+  private async reconcileStartupState(): Promise<void> {
+    const settings = await this.prisma.botSettings.findFirst().catch(() => null);
+    if (!settings || settings.mode !== 'live') return;
 
-    for (const trade of openTrades) {
-      try {
-        const markPrice = await this.binanceService.fetchMarkPrice(trade.symbol);
-        const sl = trade.signal?.stopLoss ?? null;
-        const tp = trade.signal?.takeProfit1 ?? null;
+    try {
+      await this.run();
 
-        const hitSL = sl !== null && (trade.direction === 'LONG' ? markPrice <= sl : markPrice >= sl);
-        const hitTP = tp !== null && (trade.direction === 'LONG' ? markPrice >= tp : markPrice <= tp);
+      const [dbTrades, exchangePositions] = await Promise.all([
+        this.prisma.trade.findMany({ where: { status: 'live_open' } }),
+        this.binanceService.fetchOpenPositions(),
+      ]);
 
-        if (hitSL) {
-          await this.paperTradingService.closeTrade(trade.id, sl!);
-          await this.logsService.info('monitor', 'Paper trade stopped out', {
-            tradeId: trade.id,
-            symbol: trade.symbol,
-            exitPrice: sl,
-          });
-        } else if (hitTP) {
-          await this.paperTradingService.closeTrade(trade.id, tp!);
-          await this.logsService.info('monitor', 'Paper trade hit take profit', {
-            tradeId: trade.id,
-            symbol: trade.symbol,
-            exitPrice: tp,
-          });
-        }
-      } catch (err) {
-        await this.logsService.warn('monitor', `Paper trade monitor failed: ${trade.symbol}`, {
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
+      const dbSymbols = new Set(dbTrades.map((trade) => trade.symbol));
+      const orphanPositions = exchangePositions.filter((position) => !dbSymbols.has(position.symbol));
+      if (orphanPositions.length === 0) return;
+
+      const symbols = orphanPositions.map((position) => position.symbol);
+      await this.prisma.botSettings.updateMany({
+        where: { isPaused: false },
+        data: { isPaused: true },
+      });
+      await this.logsService.error('startup-reconcile', 'Exchange positions found without matching DB trades; bot paused', {
+        symbols,
+      });
+      await this.logsService.risk(
+        'startup_position_mismatch',
+        'Exchange positions found without matching DB trades; bot paused',
+        'critical',
+        { symbols },
+      );
+      await this.telegramService.sendMessage(
+        `<b>CRITICAL:</b> startup reconciliation paused the bot.\nOpen Binance positions without DB trades: ${symbols.join(', ')}`,
+      );
+    } catch (err) {
+      await this.logsService.error('startup-reconcile', 'Startup reconciliation failed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
   private async monitorLiveTrades(): Promise<void> {
+    // Only reconcile when actually in live mode — signedRequest goes to testnet otherwise,
+    // which would return 0 positions and incorrectly close live DB records.
+    const settings = await this.prisma.botSettings.findFirst();
+    if (settings?.mode !== 'live') return;
+
     const openLiveTrades = await this.prisma.trade.findMany({
       where: { status: 'live_open' },
     });

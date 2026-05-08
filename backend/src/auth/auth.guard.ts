@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
 import { AuthService } from './auth.service';
 
-const PUBLIC_ROUTES = new Set(['/health', '/api/auth/login', '/api/auth/logout']);
+const PUBLIC_ROUTES = new Set(['/health', '/api/auth/nonce', '/api/auth/login', '/api/auth/logout']);
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -12,7 +12,7 @@ export class AuthGuard implements CanActivate {
     private readonly configService: ConfigService,
   ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const authEnabled = this.configService.get<boolean>('dashboardAuthEnabled', true);
     if (!authEnabled) return true;
 
@@ -20,9 +20,14 @@ export class AuthGuard implements CanActivate {
     if (PUBLIC_ROUTES.has(request.path)) return true;
 
     const token = request.cookies?.['perpscout_session'] as string | undefined;
-    if (!token || !this.authService.isValidSession(token)) {
+    if (!token || !(await this.authService.isValidSession(token))) {
       throw new UnauthorizedException('Not authenticated');
     }
+    const address = await this.authService.getSessionAddress(token);
+    if (!address) {
+      throw new UnauthorizedException('Not authenticated');
+    }
+    (request as Request & { authAddress?: string }).authAddress = address;
     return true;
   }
 }

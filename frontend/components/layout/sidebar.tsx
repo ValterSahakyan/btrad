@@ -21,8 +21,8 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-full max-w-72 rounded-[28px] border border-white/10 bg-black/20 p-4 backdrop-blur">
-      <div className="mb-6 rounded-2xl bg-white/5 p-4">
+    <aside className="app-sidebar w-full max-w-72 rounded-[28px] border border-white/10 bg-black/20 p-4 backdrop-blur">
+      <div className="app-sidebar-brand mb-6 rounded-2xl bg-white/5 p-4">
         <div className="mb-2 flex items-center gap-3">
           <div className="rounded-2xl bg-accent/15 p-2 text-accent">
             <ChartCandlestick size={22} />
@@ -32,9 +32,9 @@ export function Sidebar() {
             <div className="text-lg font-semibold">Futures Console</div>
           </div>
         </div>
-        <p className="text-sm text-muted">Safety-first dashboard for Binance USDⓈ-M scanning, review, paper trading, and manual approvals.</p>
+        <p className="text-sm text-muted">Automated Binance USDⓈ-M Futures bot — scanning, signals, live execution, and risk controls.</p>
       </div>
-      <nav className="space-y-2">
+      <nav className="app-nav space-y-2">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href;
@@ -43,7 +43,7 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               className={cn(
-                'flex items-center gap-3 rounded-2xl px-4 py-3 text-sm transition',
+                'app-nav-link flex items-center gap-3 rounded-2xl px-4 py-3 text-sm transition',
                 isActive ? 'bg-accent text-surface' : 'bg-white/5 text-white hover:bg-white/10',
               )}
             >

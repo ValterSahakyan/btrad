@@ -18,33 +18,33 @@ export class AuthController {
 
   @Post('/login')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  login(
+  async login(
     @Body() body: { address: string; signature: string },
     @Res({ passthrough: true }) response: Response,
   ) {
-    const token = this.authService.verifyAndLogin(body.address, body.signature);
+    const token = await this.authService.verifyAndLogin(body.address, body.signature);
     response.cookie('perpscout_session', token, {
       httpOnly: true,
       sameSite: 'strict',
       secure: process.env.NODE_ENV === 'production',
-      maxAge: 24 * 60 * 60 * 1000,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
     });
     return { success: true, address: body.address };
   }
 
   @Post('/logout')
-  logout(@Req() request: Request, @Res({ passthrough: true }) response: Response) {
+  async logout(@Req() request: Request, @Res({ passthrough: true }) response: Response) {
     const token = request.cookies?.['perpscout_session'] as string | undefined;
-    if (token) this.authService.logout(token);
+    if (token) await this.authService.logout(token);
     response.clearCookie('perpscout_session');
     return { success: true };
   }
 
   @Get('/me')
-  me(@Req() request: Request) {
+  async me(@Req() request: Request) {
     const token = request.cookies?.['perpscout_session'] as string | undefined;
     if (!token) return { authenticated: false };
-    const address = this.authService.getSessionAddress(token);
+    const address = await this.authService.getSessionAddress(token);
     if (!address) return { authenticated: false };
     return { authenticated: true, address };
   }

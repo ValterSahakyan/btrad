@@ -1,9 +1,11 @@
+import { randomBytes } from 'crypto';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ethers } from 'ethers';
-import { randomBytes } from 'crypto';
+import Redis from 'ioredis';
 
-const NONCE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const NONCE_TTL_MS = 5 * 60 * 1000;
+const SESSION_TTL_SEC = 7 * 24 * 60 * 60;
 
 interface NonceEntry {
   nonce: string;
@@ -13,12 +15,13 @@ interface NonceEntry {
 
 @Injectable()
 export class AuthService {
-  // address (lowercase) → nonce entry
-  private readonly pendingNonces = new Map<string, NonceEntry>();
-  // session token → address
-  private readonly sessions = new Map<string, string>();
+  private readonly redis: Redis;
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(private readonly configService: ConfigService) {
+    this.redis = new Redis(this.configService.get<string>('redisUrl', 'redis://localhost:6379'), {
+      maxRetriesPerRequest: null,
+    });
+  }
 
   generateNonce(address: string): { message: string } {
     const normalised = address.toLowerCase();
@@ -35,27 +38,28 @@ export class AuthService {
       'No transaction will be made.',
     ].join('\n');
 
-    this.pendingNonces.set(normalised, {
+    const entry: NonceEntry = {
       nonce,
       message,
       expiresAt: Date.now() + NONCE_TTL_MS,
-    });
+    };
+    void this.redis.set(this.nonceKey(normalised), JSON.stringify(entry), 'PX', NONCE_TTL_MS);
 
     return { message };
   }
 
-  verifyAndLogin(address: string, signature: string): string {
+  async verifyAndLogin(address: string, signature: string): Promise<string> {
     const allowedWallet = this.configService.get<string>('dashboardAllowedWallet', '');
-
     const normalised = address.toLowerCase();
-    const entry = this.pendingNonces.get(normalised);
+    const rawEntry = await this.redis.get(this.nonceKey(normalised));
+    const entry = rawEntry ? (JSON.parse(rawEntry) as NonceEntry) : null;
 
     if (!entry) {
-      throw new UnauthorizedException('No pending nonce — request a new one');
+      throw new UnauthorizedException('No pending nonce - request a new one');
     }
     if (Date.now() > entry.expiresAt) {
-      this.pendingNonces.delete(normalised);
-      throw new UnauthorizedException('Nonce expired — request a new one');
+      await this.redis.del(this.nonceKey(normalised));
+      throw new UnauthorizedException('Nonce expired - request a new one');
     }
 
     let recovered: string;
@@ -73,22 +77,28 @@ export class AuthService {
       throw new UnauthorizedException('Wallet not authorised');
     }
 
-    this.pendingNonces.delete(normalised);
+    await this.redis.del(this.nonceKey(normalised));
 
     const token = randomBytes(32).toString('hex');
-    this.sessions.set(token, normalised);
+    await this.redis.set(`session:${token}`, normalised, 'EX', SESSION_TTL_SEC);
     return token;
   }
 
-  isValidSession(token: string): boolean {
-    return this.sessions.has(token);
+  async isValidSession(token: string): Promise<boolean> {
+    const value = await this.redis.get(`session:${token}`);
+    return value !== null;
   }
 
-  getSessionAddress(token: string): string | undefined {
-    return this.sessions.get(token);
+  async getSessionAddress(token: string): Promise<string | undefined> {
+    const value = await this.redis.get(`session:${token}`);
+    return value ?? undefined;
   }
 
-  logout(token: string): void {
-    this.sessions.delete(token);
+  async logout(token: string): Promise<void> {
+    await this.redis.del(`session:${token}`);
+  }
+
+  private nonceKey(address: string): string {
+    return `auth:nonce:${address}`;
   }
 }
