@@ -49,6 +49,7 @@ export default function TradesPage() {
   const [trades, setTrades] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [backendError, setBackendError] = useState<string | null>(null);
   const [closingId, setClosingId] = useState<string | null>(null);
   const [clearing, setClearing] = useState(false);
   const [page, setPage] = useState(1);
@@ -57,10 +58,15 @@ export default function TradesPage() {
   const fetchTrades = useCallback(async () => {
     try {
       const res = await fetch(`${API}/trades`, { credentials: 'include', cache: 'no-store' });
-      if (res.ok) {
-        setTrades(await res.json());
-        setLastUpdated(new Date());
+      if (!res.ok) {
+        setBackendError(`Backend request failed (${res.status})`);
+        return;
       }
+      setTrades(await res.json());
+      setLastUpdated(new Date());
+      setBackendError(null);
+    } catch {
+      setBackendError('Backend unavailable');
     } finally {
       setLoading(false);
     }
@@ -125,6 +131,11 @@ export default function TradesPage() {
   return (
     <div className="space-y-3">
       {modal}
+      {backendError && (
+        <div className="panel border border-danger/20 bg-danger/5 px-4 py-3 text-[12px] text-danger">
+          {backendError}. Retrying automatically.
+        </div>
+      )}
       {/* Header bar */}
       <div className="panel px-4 py-2.5 flex items-center gap-3">
         <span className="text-[12px] font-semibold text-white mr-auto">Trade History</span>

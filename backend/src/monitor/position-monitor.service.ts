@@ -1,8 +1,10 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { Prisma, Trade } from '@prisma/client';
 import { BinanceService } from '../binance/binance.service';
+import { OrderExecutionService } from '../execution/order-execution.service';
 import { LogsService } from '../logs/logs.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ScannerService } from '../scanner/scanner.service';
 import { TelegramService } from '../telegram/telegram.service';
 
 type LiveTradeWithOrders = Prisma.TradeGetPayload<{
@@ -14,7 +16,9 @@ export class PositionMonitorService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly binanceService: BinanceService,
+    private readonly orderExecutionService: OrderExecutionService,
     private readonly logsService: LogsService,
+    private readonly scannerService: ScannerService,
     private readonly telegramService: TelegramService,
   ) {}
 
@@ -23,7 +27,10 @@ export class PositionMonitorService implements OnModuleInit {
   }
 
   async run(): Promise<void> {
-    await Promise.all([this.monitorLiveTrades(), this.expireStaleSignals()]);
+    await this.monitorLiveTrades();
+    await this.expireStaleSignals();
+    await this.refillOpenSlots();
+    await this.ensureContinuousLiveFlow();
   }
 
   private async reconcileStartupState(): Promise<void> {
@@ -251,8 +258,109 @@ export class PositionMonitorService implements OnModuleInit {
 
   private async expireStaleSignals(): Promise<void> {
     await this.prisma.signal.updateMany({
-      where: { status: 'active', expiresAt: { lt: new Date() } },
+      where: { status: { in: ['pending', 'active', 'approved'] }, expiresAt: { lt: new Date() } },
       data: { status: 'expired' },
     });
+  }
+
+  private async refillOpenSlots(): Promise<void> {
+    const settings = await this.prisma.botSettings.findFirst();
+    if (!settings) return;
+    if (settings.isPaused) return;
+    if (settings.mode !== 'live') return;
+    if (!settings.realTradingEnabled) return;
+    if (settings.requireDashboardConfirmation !== false) return;
+
+    const maxOpenTrades = settings.maxOpenTrades ?? 0;
+    if (maxOpenTrades <= 0) return;
+
+    const openTrades = await this.prisma.trade.findMany({
+      where: { status: 'live_open' },
+      select: { symbol: true },
+    });
+    const availableSlots = maxOpenTrades - openTrades.length;
+    if (availableSlots <= 0) return;
+
+    const openSymbols = new Set(openTrades.map((trade) => trade.symbol));
+    const candidates = await this.prisma.signal.findMany({
+      where: {
+        status: { in: ['active', 'approved'] },
+        expiresAt: { gt: new Date() },
+      },
+      include: { symbol: true },
+      orderBy: [{ confidenceScore: 'desc' }, { createdAt: 'asc' }],
+      take: Math.max(availableSlots * 4, 10),
+    });
+
+    let executed = 0;
+
+    for (const signal of candidates) {
+      if (executed >= availableSlots) break;
+      if (openSymbols.has(signal.symbol.symbol)) continue;
+
+      try {
+        if (signal.status === 'approved') {
+          const revived = await this.prisma.signal.updateMany({
+            where: { id: signal.id, status: 'approved' },
+            data: { status: 'active' },
+          });
+          if (revived.count === 0) continue;
+        }
+
+        await this.orderExecutionService.approveLive(signal.id, 'system-auto-refill');
+        openSymbols.add(signal.symbol.symbol);
+        executed += 1;
+      } catch (err) {
+        await this.logsService.warn('monitor', `Auto-refill execution failed for ${signal.symbol.symbol}`, {
+          signalId: signal.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    if (executed > 0) {
+      await this.logsService.info('monitor', 'Auto-refilled open live trade slots', {
+        executed,
+        maxOpenTrades,
+      });
+    }
+  }
+
+  private async ensureContinuousLiveFlow(): Promise<void> {
+    const settings = await this.prisma.botSettings.findFirst();
+    if (!settings) return;
+    if (settings.isPaused) return;
+    if (settings.mode !== 'live') return;
+    if (!settings.realTradingEnabled) return;
+    if (settings.requireDashboardConfirmation !== false) return;
+
+    const openTrades = await this.prisma.trade.findMany({
+      where: { status: 'live_open' },
+      select: { symbol: true },
+    });
+    const maxOpenTrades = settings.maxOpenTrades ?? 0;
+    if (openTrades.length >= maxOpenTrades) return;
+
+    const openSymbols = openTrades.map((trade) => trade.symbol);
+    const queuedSignals = await this.prisma.signal.count({
+      where: {
+        status: { in: ['active', 'approved'] },
+        expiresAt: { gt: new Date() },
+        symbol: openSymbols.length > 0 ? { symbol: { notIn: openSymbols } } : undefined,
+      },
+    });
+
+    if (queuedSignals > 0) return;
+
+    const scan = await this.scannerService.runScan();
+    await this.logsService.info('monitor', 'Triggered immediate scan to maintain continuous live trading', {
+      openTrades: openTrades.length,
+      maxOpenTrades,
+      processed: scan.processed,
+      signalsCreated: scan.signalsCreated,
+      skipped: scan.skipped ?? false,
+    });
+
+    await this.refillOpenSlots();
   }
 }

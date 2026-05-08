@@ -48,6 +48,7 @@ export default function SignalsPage() {
     mode: 'testnet', requireDashboardConfirmation: true,
   });
   const [loading, setLoading] = useState(true);
+  const [backendError, setBackendError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
 
   const fetchAll = useCallback(async () => {
@@ -56,8 +57,16 @@ export default function SignalsPage() {
         fetch(`${API}/signals`, { credentials: 'include', cache: 'no-store' }),
         fetch(`${API}/status`, { credentials: 'include', cache: 'no-store' }),
       ]);
-      if (sigRes.ok) setSignals(await sigRes.json());
-      if (stRes.ok) setStatus(await stRes.json());
+      if (!sigRes.ok || !stRes.ok) {
+        setBackendError(`Backend request failed (${!sigRes.ok ? sigRes.status : stRes.status})`);
+        return;
+      }
+
+      setSignals(await sigRes.json());
+      setStatus(await stRes.json());
+      setBackendError(null);
+    } catch {
+      setBackendError('Backend unavailable');
     } finally {
       setLoading(false);
     }
@@ -82,6 +91,12 @@ export default function SignalsPage() {
 
   return (
     <div className="space-y-3">
+      {backendError && (
+        <div className="panel border border-danger/20 bg-danger/5 px-4 py-3 text-[12px] text-danger">
+          {backendError}. Retrying automatically.
+        </div>
+      )}
+
       {/* Controls bar */}
       <div className="panel px-4 py-2.5 flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2 mr-auto">

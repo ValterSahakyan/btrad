@@ -56,9 +56,12 @@ jobs:
             export BACKEND_IMAGE=perpscout-backend-local
             export FRONTEND_IMAGE=perpscout-frontend-local
 
-            # Rebuild Docker images from fresh source with no cache to guarantee
-            # the containers include the deployed commit.
-            docker compose build --no-cache backend frontend
+            # Rebuild application images on the server. Because the checkout is
+            # already pinned to the exact workflow SHA above, we do not need to
+            # throw away Docker layer cache on every deploy. Keeping cache makes
+            # repeated deploys much faster, especially when package manifests
+            # have not changed.
+            docker compose build backend frontend
 
             # Restart backend first (runs DB migrations on startup), then frontend.
             # --force-recreate ensures the new image is always used even if the

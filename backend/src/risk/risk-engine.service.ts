@@ -44,9 +44,17 @@ export class RiskEngineService {
       if (settings?.mode === 'live') throw err;
       return [];
     });
-    const rawBalance = Number(balanceRows.find((row) => row.asset === 'USDT')?.availableBalance ?? 0);
+    const usdtRow = balanceRows.find((row) => row.asset === 'USDT');
+    const availableBalance = Number(usdtRow?.availableBalance ?? 0);
+    const totalBalance = Number(usdtRow?.balance ?? 0);
+    // Use wallet balance for daily loss limits so open margin usage does not
+    // artificially shrink the denominator and block new entries too early.
+    // Keep available balance for actual position sizing.
+    const riskReferenceBalance =
+      totalBalance > 0 ? totalBalance : (settings?.mode === 'live' ? 0 : 10_000);
     // In testnet/paper mode use a $10k paper balance when real testnet funds are zero
-    const usdtBalance = rawBalance > 0 ? rawBalance : (settings?.mode === 'live' ? 0 : 10_000);
+    const usdtBalance =
+      availableBalance > 0 ? availableBalance : (settings?.mode === 'live' ? 0 : 10_000);
 
     const riskPerTradePercent = settings?.riskPerTradePercent ?? 1;
     const maxOpenTrades = settings?.maxOpenTrades ?? 2;
@@ -60,7 +68,7 @@ export class RiskEngineService {
     const dailyLoss = closedTrades
       .filter((trade) => (trade.pnl ?? 0) < 0)
       .reduce((sum, trade) => sum + Math.abs(trade.pnl ?? 0), 0);
-    const dailyLossPercent = usdtBalance === 0 ? 0 : (dailyLoss / usdtBalance) * 100;
+    const dailyLossPercent = riskReferenceBalance === 0 ? 0 : (dailyLoss / riskReferenceBalance) * 100;
     const consecutiveLosses = closedTrades.findIndex((trade) => (trade.pnl ?? 0) > 0);
     const effectiveConsecutiveLosses = consecutiveLosses === -1 ? closedTrades.length : consecutiveLosses;
 
