@@ -40,7 +40,9 @@ export class RiskEngineService {
       orderBy: { closedAt: 'desc' },
       select: { pnl: true },
     });
-    const balanceRows = await this.binanceService.fetchAccountBalance().catch((err) => {
+    const balanceRows = await (settings?.mode === 'live'
+      ? this.binanceService.fetchLiveAccountBalance()
+      : this.binanceService.fetchAccountBalance()).catch((err) => {
       if (settings?.mode === 'live') throw err;
       return [];
     });

@@ -99,6 +99,12 @@ export class ScannerService {
 
     let processed = 0;
     let signalsCreated = 0;
+    let filteredPreCandidate = 0;
+    let noStrategyCandidate = 0;
+    let riskRejected = 0;
+    let duplicateTradeSkipped = 0;
+    let duplicateSignalSkipped = 0;
+    const riskReasonCounts = new Map<string, number>();
 
     for (const { record: symbolRecord, ticker } of sorted) {
       try {
@@ -141,6 +147,7 @@ export class ScannerService {
         });
 
         if (hotScore < minHotScore || spread > 0.8 || liquidity < 10) {
+          filteredPreCandidate += 1;
           continue;
         }
 
@@ -157,7 +164,10 @@ export class ScannerService {
           strategyConfig,
         });
 
-        if (!candidate) continue;
+        if (!candidate) {
+          noStrategyCandidate += 1;
+          continue;
+        }
 
         const provisionalConfidence = this.confidenceScoreService.calculate({
           hotScore,
@@ -192,6 +202,16 @@ export class ScannerService {
 
         const minConfidence = settings?.minConfidenceScore ?? 65;
         if (!risk.allowed || confidenceScore < minConfidence) {
+          riskRejected += 1;
+          for (const reason of risk.messages) {
+            riskReasonCounts.set(reason, (riskReasonCounts.get(reason) ?? 0) + 1);
+          }
+          if (confidenceScore < minConfidence) {
+            riskReasonCounts.set(
+              `Confidence below minimum (${confidenceScore.toFixed(1)} < ${minConfidence})`,
+              (riskReasonCounts.get(`Confidence below minimum (${confidenceScore.toFixed(1)} < ${minConfidence})`) ?? 0) + 1,
+            );
+          }
           await this.logsService.warn('scanner', 'Signal skipped by filters', {
             symbol: symbolRecord.symbol,
             confidenceScore: Number(confidenceScore.toFixed(1)),
@@ -207,13 +227,19 @@ export class ScannerService {
         const existingTrade = await this.prisma.trade.findFirst({
           where: { symbol: symbolRecord.symbol, status: 'live_open' },
         });
-        if (existingTrade) continue;
+        if (existingTrade) {
+          duplicateTradeSkipped += 1;
+          continue;
+        }
 
         // Skip if already have a pending or active signal for this symbol
         const existingSignal = await this.prisma.signal.findFirst({
           where: { symbolId: symbolRecord.id, status: { in: ['pending', 'active'] } },
         });
-        if (existingSignal) continue;
+        if (existingSignal) {
+          duplicateSignalSkipped += 1;
+          continue;
+        }
 
         const signal = await this.prisma.signal.create({
           data: {
@@ -286,7 +312,22 @@ export class ScannerService {
       }
     }
 
-    await this.logsService.info('scanner', 'Completed market scan', { processed, signalsCreated, symbolsTotal: sorted.length });
+    const topBlockers = [...riskReasonCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([reason, count]) => ({ reason, count }));
+
+    await this.logsService.info('scanner', 'Completed market scan', {
+      processed,
+      signalsCreated,
+      symbolsTotal: sorted.length,
+      filteredPreCandidate,
+      noStrategyCandidate,
+      riskRejected,
+      duplicateTradeSkipped,
+      duplicateSignalSkipped,
+      topBlockers,
+    });
     return { processed, signalsCreated };
   }
 
