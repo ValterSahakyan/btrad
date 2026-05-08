@@ -1,5 +1,6 @@
 node_modules
 .next
+frontend/.next-dev
 dist
 coverage
 .env

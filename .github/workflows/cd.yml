@@ -57,8 +57,29 @@ jobs:
             # --force-recreate ensures the new image is always used even if the
             # image tag/name is unchanged. Postgres and Redis are untouched.
             docker compose up -d --no-deps --force-recreate backend
-            sleep 15
             docker compose up -d --no-deps --force-recreate frontend
+
+            # Wait for both application containers to become healthy.
+            for i in $(seq 1 24); do
+              BACKEND_STATE=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' btrad-backend-1 2>/dev/null || true)
+              FRONTEND_STATE=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' btrad-frontend-1 2>/dev/null || true)
+              echo "Health check attempt $i: backend=$BACKEND_STATE frontend=$FRONTEND_STATE"
+
+              if [ "$BACKEND_STATE" = "healthy" ] && [ "$FRONTEND_STATE" = "healthy" ]; then
+                break
+              fi
+
+              if [ "$i" -eq 24 ]; then
+                echo "Deployment failed health checks"
+                docker compose ps
+                docker compose logs --tail=200 backend frontend
+                exit 1
+              fi
+
+              sleep 5
+            done
+
+            docker compose ps
 
             # Remove dangling images to free disk space.
             docker image prune -f

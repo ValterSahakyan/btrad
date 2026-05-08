@@ -11,25 +11,15 @@
       "static/chunks/main-app.js",
       "static/chunks/app/error.js"
     ],
-    "/overview/page": [
+    "/settings/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/overview/page.js"
+      "static/chunks/app/settings/page.js"
     ],
     "/trades/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/trades/page.js"
-    ],
-    "/signals/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/signals/page.js"
-    ],
-    "/settings/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/settings/page.js"
     ]
   }
 }
