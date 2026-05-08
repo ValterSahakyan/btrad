@@ -2,6 +2,7 @@ import type { NextConfig } from 'next';
 import { PHASE_DEVELOPMENT_SERVER } from 'next/constants';
 
 const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3333';
+const apiOrigin = getCspConnectOrigin(apiBase);
 
 const securityHeaders = [
   { key: 'X-DNS-Prefetch-Control', value: 'on' },
@@ -17,11 +18,19 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
       "font-src 'self'",
-      `connect-src 'self' ${apiBase}`,
+      `connect-src 'self' ${apiOrigin}`,
       "frame-ancestors 'none'",
     ].join('; '),
   },
 ];
+
+function getCspConnectOrigin(value: string): string {
+  try {
+    return new URL(value).origin;
+  } catch {
+    return value.replace(/\/+$/, '');
+  }
+}
 
 export default function nextConfig(phase: string): NextConfig {
   return {
