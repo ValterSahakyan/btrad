@@ -49,6 +49,12 @@ jobs:
               exit 1
             fi
 
+            # This workflow builds from source on the server. Ignore any
+            # preconfigured GHCR image names in the server environment, since
+            # invalid mixed-case tags there can break docker compose parsing.
+            export BACKEND_IMAGE=perpscout-backend-local
+            export FRONTEND_IMAGE=perpscout-frontend-local
+
             # Rebuild Docker images from fresh source with no cache to guarantee
             # the containers include the deployed commit.
             docker compose build --no-cache backend frontend
