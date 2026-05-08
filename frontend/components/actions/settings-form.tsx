@@ -10,7 +10,6 @@ type SettingsState = {
   mode: 'testnet' | 'live';
   isPaused: boolean;
   enableRealTrading: boolean;
-  paperTradingEnabled: boolean;
   allowAutoLiveExecution: boolean;
   defaultLeverage: number;
   maxLeverage: number;
@@ -59,7 +58,6 @@ const SECTIONS: Section[] = [
       { key: 'mode',                  label: 'Mode' },
       { key: 'isPaused',              label: 'Bot Paused' },
       { key: 'enableRealTrading',     label: 'Real Trading' },
-      { key: 'paperTradingEnabled',   label: 'Paper Trading' },
       { key: 'allowAutoLiveExecution',label: 'Auto-Execute' },
     ],
   },
@@ -129,7 +127,7 @@ const SECTIONS: Section[] = [
 ];
 
 const BOOLEAN_KEYS = new Set([
-  'isPaused', 'enableRealTrading', 'paperTradingEnabled', 'allowAutoLiveExecution',
+  'isPaused', 'enableRealTrading', 'allowAutoLiveExecution',
   'breakoutEnabled', 'pullbackEnabled', 'reversionEnabled',
 ]);
 
@@ -146,7 +144,6 @@ export function SettingsForm({ settings }: { settings: any }) {
     mode: settings.mode ?? 'testnet',
     isPaused: settings.isPaused ?? false,
     enableRealTrading: settings.enableRealTrading ?? settings.realTradingEnabled ?? false,
-    paperTradingEnabled: settings.paperTradingEnabled ?? true,
     allowAutoLiveExecution: settings.allowAutoLiveExecution ?? (settings.requireDashboardConfirmation === false),
     defaultLeverage: settings.defaultLeverage ?? 3,
     maxLeverage: settings.maxLeverage ?? 5,

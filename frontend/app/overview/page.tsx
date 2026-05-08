@@ -7,8 +7,8 @@ import { fetchApiSafe } from '@/services/api';
 
 const defaultStatus = {
   botStatus: 'offline', mode: 'testnet', realTradingEnabled: false,
-  paperTradingEnabled: true, requireDashboardConfirmation: true,
-  executionMode: 'signal_only', openTrades: 0, openPaperTrades: 0, activeSignals: 0,
+  requireDashboardConfirmation: true,
+  executionMode: 'signal_only', openTrades: 0, activeSignals: 0,
 };
 const defaultPerf = { totalPnl: 0, winRate: 0, profitFactor: 0, averageWin: 0, averageLoss: 0, totalTrades: 0 };
 
@@ -22,14 +22,12 @@ function pnl(v: number | null | undefined) {
 function sigStatus(s: string) {
   if (s === 'active') return <Badge tone="positive">active</Badge>;
   if (s === 'pending') return <Badge tone="warning">pending</Badge>;
-  if (s === 'paper_opened') return <Badge tone="warning">paper</Badge>;
   if (s === 'live_executed') return <Badge tone="positive">live</Badge>;
   if (s === 'expired' || s === 'skipped') return <Badge tone="neutral">{s}</Badge>;
   return <Badge tone="neutral">{s}</Badge>;
 }
 function tradeStatus(s: string) {
   if (s === 'live_open') return <Badge tone="positive">live</Badge>;
-  if (s === 'paper_open') return <Badge tone="warning">paper</Badge>;
   if (s === 'take_profit') return <Badge tone="positive">TP</Badge>;
   if (s === 'stopped') return <Badge tone="danger">SL</Badge>;
   if (s === 'manually_closed') return <Badge tone="neutral">closed</Badge>;
@@ -45,7 +43,6 @@ function logLevel(l: string) {
 function execMode(m: string) {
   if (m === 'live_auto')   return 'Live Auto';
   if (m === 'live_manual') return 'Live Manual';
-  if (m === 'paper_manual') return 'Paper Manual';
   return 'Signal Only';
 }
 
@@ -102,7 +99,7 @@ export default async function OverviewPage() {
         <MetricCard
           label="Live Open"
           value={String(status.openTrades)}
-          hint={`${status.openPaperTrades} paper · ${status.activeSignals} signals`}
+          hint={`${status.activeSignals} signals`}
         />
         <MetricCard
           label="Futures Balance"

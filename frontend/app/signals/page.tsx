@@ -31,7 +31,6 @@ function sigStatus(s: string) {
   if (s === 'active') return <Badge tone="positive">active</Badge>;
   if (s === 'pending') return <Badge tone="warning">pending</Badge>;
   if (s === 'approved') return <Badge tone="warning">approved</Badge>;
-  if (s === 'paper_opened') return <Badge tone="warning">paper</Badge>;
   if (s === 'live_executed') return <Badge tone="positive">live</Badge>;
   if (s === 'expired')   return <Badge tone="neutral">expired</Badge>;
   if (s === 'skipped')   return <Badge tone="neutral">skipped</Badge>;
@@ -45,7 +44,7 @@ const ACTIONABLE = new Set(['active', 'pending']);
 export default function SignalsPage() {
   const [signals, setSignals] = useState<any[]>([]);
   const [status, setStatus] = useState<any>({
-    realTradingEnabled: false, paperTradingEnabled: true,
+    realTradingEnabled: false,
     mode: 'testnet', requireDashboardConfirmation: true,
   });
   const [loading, setLoading] = useState(true);
@@ -77,7 +76,6 @@ export default function SignalsPage() {
   }, [signals.length, page]);
 
   const liveEnabled = status.realTradingEnabled && status.mode === 'live';
-  const paperEnabled = status.paperTradingEnabled !== false;
   const autoExec = status.requireDashboardConfirmation === false && liveEnabled;
 
   const pageData = signals.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -89,16 +87,13 @@ export default function SignalsPage() {
         <div className="flex items-center gap-2 mr-auto">
           {autoExec && <Badge tone="danger">Auto-Execute ON</Badge>}
           {!autoExec && liveEnabled && <Badge tone="positive">Live Manual</Badge>}
-          {!liveEnabled && paperEnabled && <Badge tone="warning">Paper Mode</Badge>}
-          {!liveEnabled && !paperEnabled && <Badge tone="neutral">Signal Only</Badge>}
+          {!liveEnabled && <Badge tone="neutral">Signal Only</Badge>}
           <span className="text-[11px] text-dim">
             {autoExec
               ? 'Orders placed automatically on qualifying signals'
               : liveEnabled
                 ? 'Click Execute Live to place a real Binance Futures order'
-                : paperEnabled
-                  ? 'Simulate trades without placing Binance orders'
-                  : 'Review signals only — no execution'}
+                : 'Review signals only — enable live trading in Settings to execute'}
           </span>
         </div>
         <ActionButton
@@ -165,14 +160,6 @@ export default function SignalsPage() {
                               confirmTitle="Execute Live Order"
                               confirmMessage={`Place a real Binance Futures ${sig.direction} order for ${sig.symbol?.symbol ?? sig.symbol}? Entry ~${number(sig.entryPrice, 4)}, SL ${number(sig.stopLoss, 4)}, TP ${number(sig.takeProfit1, 4)}.`}
                               confirmVariant="danger"
-                              onSuccess={fetchAll}
-                            />
-                            <ActionButton
-                              label="Paper"
-                              path={`/signals/${sig.id}/approve-paper`}
-                              variant="secondary"
-                              size="sm"
-                              disabled={!canAct || !paperEnabled || autoExec}
                               onSuccess={fetchAll}
                             />
                             <ActionButton

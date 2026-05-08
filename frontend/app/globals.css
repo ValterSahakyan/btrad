@@ -192,7 +192,6 @@ select option {
 
 /* Row highlights */
 .row-live { background: rgba(63, 185, 80, 0.04); }
-.row-paper { background: rgba(227, 179, 65, 0.04); }
 
 @media (max-width: 900px) {
   .app-sidebar {

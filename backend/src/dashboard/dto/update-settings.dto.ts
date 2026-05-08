@@ -26,10 +26,6 @@ export class UpdateSettingsDto {
   allowAutoLiveExecution?: boolean;
 
   @IsOptional()
-  @IsBoolean()
-  paperTradingEnabled?: boolean;
-
-  @IsOptional()
   @IsInt()
   @Min(1)
   @Max(125)

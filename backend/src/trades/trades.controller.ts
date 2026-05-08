@@ -21,11 +21,6 @@ export class TradesController {
     return this.tradesService.closeLive(id, getActor(request));
   }
 
-  @Post('/:id/close-paper')
-  closePaper(@Param('id') id: string, @Req() request: Request) {
-    return this.tradesService.closePaper(id, getActor(request));
-  }
-
   @Post('/cleanup')
   clearClosed() {
     return this.tradesService.clearClosed();

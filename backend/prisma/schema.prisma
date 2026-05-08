@@ -23,15 +23,12 @@ enum SignalStatus {
   approved
   skipped
   expired
-  paper_opened
   live_executed
   failed
   cancelled
 }
 
 enum TradeStatus {
-  paper_open
-  paper_closed
   live_open
   live_closed
   stopped
@@ -46,7 +43,6 @@ model BotSettings {
   isPaused                     Boolean  @default(false)
   realTradingEnabled           Boolean  @default(false)
   requireDashboardConfirmation Boolean  @default(true)
-  paperTradingEnabled          Boolean  @default(true)
   defaultLeverage              Int      @default(3)
   maxLeverage                  Int      @default(5)
   riskPerTradePercent          Float    @default(1)

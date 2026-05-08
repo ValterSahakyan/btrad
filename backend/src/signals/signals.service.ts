@@ -1,8 +1,7 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrderExecutionService } from '../execution/order-execution.service';
 import { LogsService } from '../logs/logs.service';
-import { PaperTradingService } from '../paper-trading/paper-trading.service';
 
 @Injectable()
 export class SignalsService {
@@ -11,7 +10,6 @@ export class SignalsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly orderExecutionService: OrderExecutionService,
-    private readonly paperTradingService: PaperTradingService,
     private readonly logsService: LogsService,
   ) {}
 
@@ -38,17 +36,6 @@ export class SignalsService {
     await this.logsService.warn('signals', 'Live trade approval requested', { signalId: id, actor });
     await this.logsService.audit('signal.approve_live', actor, { signalId: id });
     return this.orderExecutionService.approveLive(id, actor);
-  }
-
-  async approvePaper(id: string, actor = 'system') {
-    const settings = await this.prisma.botSettings.findFirst();
-    if (settings?.paperTradingEnabled === false) {
-      throw new BadRequestException('Paper trading is disabled in settings');
-    }
-
-    await this.logsService.info('signals', 'Paper trade approval requested', { signalId: id, actor });
-    await this.logsService.audit('signal.approve_paper', actor, { signalId: id });
-    return this.paperTradingService.openFromSignal(id);
   }
 
   async skip(id: string) {

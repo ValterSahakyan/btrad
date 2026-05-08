@@ -9,7 +9,7 @@ const REFRESH_MS = 10_000;
 // Only announce a trade that has been open for at least this many ms (avoids
 // announcing positions that immediately fail due to SL rejection)
 const ANNOUNCE_DEBOUNCE_MS = 15_000;
-const TRACKED_STATUSES = new Set(['live_open', 'paper_open']);
+const TRACKED_STATUSES = new Set(['live_open']);
 const STORAGE_KEY = 'perpscout_seen_open_trade_ids';
 
 type TradeRow = {
@@ -47,9 +47,8 @@ export function TradeVoiceNotifier() {
     const speakTradeOpened = (trade: TradeRow) => {
       if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
 
-      const modeLabel = trade.status === 'paper_open' ? 'paper ' : '';
       const directionLabel = trade.direction === 'LONG' ? 'long' : 'short';
-      const message = `${modeLabel}${directionLabel} position opened on ${trade.symbol}`;
+      const message = `${directionLabel} position opened on ${trade.symbol}`;
 
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(message);

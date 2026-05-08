@@ -22,11 +22,6 @@ export class SignalsController {
     return this.signalsService.approveLive(id, getActor(request));
   }
 
-  @Post('/:id/approve-paper')
-  approvePaper(@Param('id') id: string, @Req() request: Request) {
-    return this.signalsService.approvePaper(id, getActor(request));
-  }
-
   @Post('/:id/skip')
   skip(@Param('id') id: string) {
     return this.signalsService.skip(id);

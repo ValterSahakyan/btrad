@@ -38,7 +38,6 @@ function pnlPct(v: number | null | undefined) {
 
 function statusBadge(s: string) {
   if (s === 'live_open') return <Badge tone="positive">live</Badge>;
-  if (s === 'paper_open') return <Badge tone="warning">paper</Badge>;
   if (s === 'take_profit') return <Badge tone="positive">TP</Badge>;
   if (s === 'stopped') return <Badge tone="danger">SL</Badge>;
   if (s === 'manually_closed') return <Badge tone="neutral">closed</Badge>;
@@ -78,19 +77,17 @@ export default function TradesPage() {
     if (page > totalPages && totalPages > 0) setPage(1);
   }, [trades.length, page]);
 
-  const handleClose = async (tradeId: string, paper: boolean) => {
+  const handleClose = async (tradeId: string) => {
     const ok = await confirm({
-      title: paper ? 'Close Paper Trade' : 'Close Live Trade',
-      message: paper
-        ? 'Mark this simulated paper trade as closed?'
-        : 'Place a market close order on Binance now? This will exit the position at the current market price.',
+      title: 'Close Live Trade',
+      message: 'Place a market close order on Binance now? This will exit the position at the current market price.',
       confirmLabel: 'Close Trade',
-      variant: paper ? 'default' : 'danger',
+      variant: 'danger',
     });
     if (!ok) return;
     setClosingId(tradeId);
     try {
-      await fetch(`${API}/trades/${tradeId}/${paper ? 'close-paper' : 'close-live'}`, {
+      await fetch(`${API}/trades/${tradeId}/close-live`, {
         method: 'POST', credentials: 'include',
       });
       await fetchTrades();
@@ -100,11 +97,11 @@ export default function TradesPage() {
   };
 
   const handleClear = async () => {
-    const closedCount = trades.filter((t) => !['live_open', 'paper_open'].includes(t.status)).length;
+    const closedCount = trades.filter((t) => t.status !== 'live_open').length;
     if (closedCount === 0) return;
     const ok = await confirm({
       title: 'Clear Closed Trades',
-      message: `Permanently delete ${closedCount} closed trade${closedCount !== 1 ? 's' : ''} (SL, TP, manually closed, failed)? Live and paper open trades are kept. This cannot be undone.`,
+      message: `Permanently delete ${closedCount} closed trade${closedCount !== 1 ? 's' : ''} (SL, TP, manually closed, failed)? Open live trades are kept. This cannot be undone.`,
       confirmLabel: 'Clear',
       variant: 'danger',
     });
@@ -120,8 +117,7 @@ export default function TradesPage() {
   };
 
   const liveOpen = trades.filter((t) => t.status === 'live_open').length;
-  const paperOpen = trades.filter((t) => t.status === 'paper_open').length;
-  const closedCount = trades.filter((t) => !['live_open', 'paper_open'].includes(t.status)).length;
+  const closedCount = trades.filter((t) => t.status !== 'live_open').length;
 
   const pageData = trades.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
@@ -132,7 +128,6 @@ export default function TradesPage() {
       <div className="panel px-4 py-2.5 flex items-center gap-3">
         <span className="text-[12px] font-semibold text-white mr-auto">Trade History</span>
         {liveOpen > 0 && <Badge tone="positive">{liveOpen} live</Badge>}
-        {paperOpen > 0 && <Badge tone="warning">{paperOpen} paper</Badge>}
         {lastUpdated && (
           <span className="text-[11px] text-dim font-mono">{lastUpdated.toLocaleTimeString()}</span>
         )}
@@ -176,15 +171,11 @@ export default function TradesPage() {
                 <tbody>
                   {pageData.map((t) => {
                     const isLive = t.status === 'live_open';
-                    const isPaper = t.status === 'paper_open';
                     const sizePrice = isLive && t.markPrice ? t.markPrice : t.entryPrice;
                     return (
                       <tr
                         key={t.id}
-                        className={cn(
-                          isLive  && 'row-live',
-                          isPaper && 'row-paper',
-                        )}
+                        className={cn(isLive && 'row-live')}
                       >
                         <td className="font-mono font-semibold text-[12px]">{t.symbol}</td>
                         <td>{dir(t.direction)}</td>
@@ -206,9 +197,9 @@ export default function TradesPage() {
                         <td>{pnlPct(t.pnlPercent)}</td>
                         <td>{statusBadge(t.status)}</td>
                         <td>
-                          {(isLive || isPaper) && (
+                          {isLive && (
                             <button
-                              onClick={() => handleClose(t.id, isPaper)}
+                              onClick={() => handleClose(t.id)}
                               disabled={closingId === t.id}
                               className={cn(
                                 'text-[11px] px-2 py-0.5 rounded border cursor-pointer transition-colors',

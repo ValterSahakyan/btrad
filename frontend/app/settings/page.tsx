@@ -26,7 +26,6 @@ export default async function SettingsPage() {
 
   const isLive    = settings.mode === 'live';
   const realOn    = settings.enableRealTrading ?? settings.realTradingEnabled;
-  const paperOn   = settings.paperTradingEnabled !== false;
   const autoExec  = settings.allowAutoLiveExecution ?? (settings.requireDashboardConfirmation === false);
 
   return (
@@ -50,7 +49,6 @@ export default async function SettingsPage() {
             <Row label="Mode"><Badge tone={isLive ? 'positive' : 'warning'}>{settings.mode}</Badge></Row>
             <Row label="Status"><Badge tone={settings.isPaused ? 'danger' : 'positive'}>{settings.isPaused ? 'Paused' : 'Running'}</Badge></Row>
             <Row label="Real Trading"><Badge tone={realOn ? 'positive' : 'danger'}>{realOn ? 'ON' : 'OFF'}</Badge></Row>
-            <Row label="Paper Trading"><Badge tone={paperOn ? 'warning' : 'neutral'}>{paperOn ? 'ON' : 'OFF'}</Badge></Row>
             <Row label="Execution"><Badge tone={autoExec ? 'danger' : 'warning'}>{autoExec ? 'Auto' : 'Manual'}</Badge></Row>
           </div>
 

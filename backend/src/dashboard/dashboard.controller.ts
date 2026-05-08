@@ -41,26 +41,21 @@ export class DashboardController {
     const settings = await this.prisma.botSettings.findFirst();
     const activeSignals = await this.prisma.signal.count({ where: { status: 'active' } });
     const openTrades = await this.prisma.trade.count({ where: { status: 'live_open' } });
-    const openPaperTrades = await this.prisma.trade.count({ where: { status: 'paper_open' } });
     const executionMode = settings?.realTradingEnabled && settings?.mode === 'live'
       ? settings.requireDashboardConfirmation === false
         ? 'live_auto'
         : 'live_manual'
-      : settings?.paperTradingEnabled === false
-        ? 'signal_only'
-        : 'paper_manual';
+      : 'signal_only';
     return {
       botStatus: settings?.isPaused ? 'paused' : 'running',
       mode: settings?.mode ?? 'testnet',
       realTradingEnabled: settings?.realTradingEnabled ?? false,
       enableRealTrading: settings?.realTradingEnabled ?? false,
-      paperTradingEnabled: settings?.paperTradingEnabled ?? true,
       requireDashboardConfirmation: settings?.requireDashboardConfirmation ?? true,
       allowAutoLiveExecution: settings?.requireDashboardConfirmation === false,
       executionMode,
       activeSignals,
       openTrades,
-      openPaperTrades,
       lastScannerRun: (await this.prisma.botLog.findFirst({
         where: { source: 'scanner', message: 'Completed market scan' },
         orderBy: { createdAt: 'desc' },
@@ -129,7 +124,6 @@ export class DashboardController {
       mode: 'testnet',
       isPaused: true,
       enableRealTrading: false,
-      paperTradingEnabled: true,
       allowAutoLiveExecution: false,
       defaultLeverage: 3,
       maxLeverage: 4,
@@ -390,7 +384,6 @@ export class DashboardController {
       'maxPositionUsd',
       'requireDashboardConfirmation',
       'allowAutoLiveExecution',
-      'paperTradingEnabled',
     ];
 
     const attempted = blockedKeys.filter((key) => body[key] !== undefined && body[key] !== existing[key]);

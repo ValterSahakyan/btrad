@@ -2,7 +2,6 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { BinanceService } from '../binance/binance.service';
 import { LogsService } from '../logs/logs.service';
-import { PaperTradingService } from '../paper-trading/paper-trading.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -10,7 +9,6 @@ export class TradesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly binanceService: BinanceService,
-    private readonly paperTradingService: PaperTradingService,
     private readonly logsService: LogsService,
   ) {}
 
@@ -135,22 +133,9 @@ export class TradesService {
     return updated;
   }
 
-  async closePaper(id: string, actor = 'system') {
-    const trade = await this.prisma.trade.findUnique({ where: { id } });
-    if (!trade) throw new NotFoundException('Trade not found');
-
-    const updated = await this.paperTradingService.closeTrade(id);
-    await this.logsService.info('trades', 'Paper trade closed', {
-      tradeId: id,
-      symbol: trade.symbol,
-    });
-    await this.logsService.audit('trade.close_paper', actor, { tradeId: id, symbol: trade.symbol });
-    return updated;
-  }
-
   async clearClosed(): Promise<{ deletedCount: number; message: string }> {
     const closedStatuses = [
-      'paper_closed', 'live_closed', 'stopped',
+      'live_closed', 'stopped',
       'take_profit', 'manually_closed', 'failed',
     ] as const;
 
