@@ -2,15 +2,13 @@ import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import './globals.css';
 import { Sidebar } from '@/components/layout/sidebar';
-import { Header } from '@/components/layout/header';
+import { Topbar } from '@/components/layout/header';
 import { TradeVoiceNotifier } from '@/components/layout/trade-voice-notifier';
 
 export const metadata: Metadata = {
-  title: 'PerpScout AI — Futures Console',
-  description: 'Algorithmic futures trading dashboard',
-  icons: {
-    icon: '/icon.svg',
-  },
+  title: 'BTRAD — Futures Terminal',
+  description: 'Algorithmic Binance USDⓈ-M Futures trading console',
+  icons: { icon: '/icon.svg' },
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -26,15 +24,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   }
 
   return (
-      <html lang="en">
-      <body suppressHydrationWarning className="app-body">
-        <div className="app-shell mx-auto flex min-h-screen max-w-[1600px] flex-col gap-6 p-5 lg:flex-row">
+    <html lang="en">
+      <body suppressHydrationWarning>
+        <div className="app-shell">
           <Sidebar />
-          <main className="app-main flex-1">
-            <Header />
+          <div className="app-main-wrap">
+            <Topbar />
             <TradeVoiceNotifier />
-            {children}
-          </main>
+            <main className="app-content">{children}</main>
+          </div>
         </div>
       </body>
     </html>

@@ -1,83 +1,96 @@
-import { DataTable } from '@/components/dashboard/data-table';
 import { MetricCard } from '@/components/dashboard/metric-card';
 import { fetchApiSafe } from '@/services/api';
 import { currency, number } from '@/lib/utils';
 
-const defaultPerformance = { totalTrades: 0, winRate: 0, averageWin: 0, averageLoss: 0, profitFactor: 0 };
+const defaultPerf = { totalTrades: 0, winRate: 0, averageWin: 0, averageLoss: 0, profitFactor: 0, totalPnl: 0 };
 
-function pnlCell(pnl: number) {
-  return (
-    <span className={pnl > 0 ? 'font-semibold text-positive' : pnl < 0 ? 'font-semibold text-danger' : 'text-muted'}>
-      {currency(pnl)}
-    </span>
-  );
+function pnl(v: number) {
+  return <span className={`font-mono text-[12px] font-medium ${v > 0 ? 'text-positive' : v < 0 ? 'text-danger' : 'text-dim'}`}>{currency(v)}</span>;
+}
+function winRateCell(v: number | null | undefined) {
+  const n = v ?? 0;
+  return <span className={`font-mono text-[12px] ${n >= 50 ? 'text-positive' : 'text-danger'}`}>{number(n)}%</span>;
 }
 
 export default async function PerformancePage() {
-  const [performance, strategyPerformance, symbolPerformance] = await Promise.all([
-    fetchApiSafe<any>('/performance', defaultPerformance),
-    fetchApiSafe<Record<string, { count: number; pnl: number }>>('/performance/strategies', {}),
-    fetchApiSafe<Record<string, { count: number; pnl: number }>>('/performance/symbols', {}),
+  const [perf, byStrategy, bySymbol] = await Promise.all([
+    fetchApiSafe<any>('/performance', defaultPerf),
+    fetchApiSafe<Record<string, { count: number; pnl: number; winRate?: number }>>('/performance/strategies', {}),
+    fetchApiSafe<Record<string, { count: number; pnl: number; winRate?: number }>>('/performance/symbols', {}),
   ]);
 
-  const winRate = performance.winRate ?? 0;
-  const profitFactor = performance.profitFactor ?? 0;
-
   return (
-    <div className="space-y-6">
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Total Trades" value={String(performance.totalTrades)} />
-        <MetricCard
-          label="Win Rate"
-          value={`${number(winRate)}%`}
-          tone={winRate >= 50 ? 'positive' : winRate >= 40 ? 'warning' : 'danger'}
-        />
-        <MetricCard label="Average Win" value={currency(performance.averageWin)} tone="positive" />
-        <MetricCard label="Average Loss" value={currency(performance.averageLoss)} tone="danger" />
-      </section>
-      <section className="grid gap-4 md:grid-cols-2">
-        <MetricCard
-          label="Profit Factor"
-          value={number(profitFactor)}
-          hint="Win $ / Loss $ — above 1.0 is profitable"
-          tone={profitFactor >= 1.5 ? 'positive' : profitFactor >= 1.0 ? 'warning' : 'danger'}
-        />
-        <MetricCard
-          label="Total PnL"
-          value={currency(performance.totalPnl ?? 0)}
-          tone={(performance.totalPnl ?? 0) >= 0 ? 'positive' : 'danger'}
-        />
-      </section>
-      <section className="grid gap-6 xl:grid-cols-2">
-        <DataTable
-          title="Strategy Performance"
-          headers={['Strategy', 'Trades', 'Win Rate', 'PnL']}
-          rows={Object.entries(strategyPerformance).map(([strategy, value]: [string, any]) => [
-            <span key="s" className="font-medium">{strategy}</span>,
-            value.count,
-            value.winRate != null ? (
-              <span className={(value.winRate ?? 0) >= 50 ? 'text-positive' : 'text-danger'}>
-                {number(value.winRate)}%
-              </span>
-            ) : '—',
-            pnlCell(value.pnl),
-          ])}
-        />
-        <DataTable
-          title="Symbol Performance"
-          headers={['Symbol', 'Trades', 'Win Rate', 'PnL']}
-          rows={Object.entries(symbolPerformance).map(([symbol, value]: [string, any]) => [
-            <span key="s" className="font-medium">{symbol}</span>,
-            value.count,
-            value.winRate != null ? (
-              <span className={(value.winRate ?? 0) >= 50 ? 'text-positive' : 'text-danger'}>
-                {number(value.winRate)}%
-              </span>
-            ) : '—',
-            pnlCell(value.pnl),
-          ])}
-        />
-      </section>
+    <div className="space-y-4">
+      {/* KPIs */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        <MetricCard label="Total Trades" value={String(perf.totalTrades)} mono={false} />
+        <MetricCard label="Win Rate" value={`${number(perf.winRate)}%`} tone={(perf.winRate ?? 0) >= 50 ? 'positive' : 'danger'} />
+        <MetricCard label="Profit Factor" value={number(perf.profitFactor)} hint="Win $ ÷ Loss $" tone={(perf.profitFactor ?? 0) >= 1.5 ? 'positive' : (perf.profitFactor ?? 0) >= 1 ? 'warning' : 'danger'} />
+        <MetricCard label="Total PnL" value={currency(perf.totalPnl ?? 0)} tone={(perf.totalPnl ?? 0) >= 0 ? 'positive' : 'danger'} />
+        <MetricCard label="Avg Win" value={currency(perf.averageWin)} tone="positive" />
+        <MetricCard label="Avg Loss" value={currency(perf.averageLoss)} tone="danger" />
+      </div>
+
+      {/* Strategy + Symbol breakdown */}
+      <div className="grid gap-3 xl:grid-cols-2">
+        {/* Strategy */}
+        <div className="panel overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-border">
+            <span className="text-[12px] font-semibold text-white">By Strategy</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="t-table">
+              <thead>
+                <tr>
+                  <th>Strategy</th><th>Trades</th><th>Win Rate</th><th>PnL</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(byStrategy).length === 0 && (
+                  <tr><td colSpan={4} className="py-8 text-center text-dim">No data</td></tr>
+                )}
+                {Object.entries(byStrategy).map(([strat, val]: [string, any]) => (
+                  <tr key={strat}>
+                    <td className="font-medium text-[12px]">{strat}</td>
+                    <td className="font-mono text-[12px] text-dim">{val.count}</td>
+                    <td>{winRateCell(val.winRate)}</td>
+                    <td>{pnl(val.pnl)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Symbol */}
+        <div className="panel overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-border">
+            <span className="text-[12px] font-semibold text-white">By Symbol</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="t-table">
+              <thead>
+                <tr>
+                  <th>Symbol</th><th>Trades</th><th>Win Rate</th><th>PnL</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(bySymbol).length === 0 && (
+                  <tr><td colSpan={4} className="py-8 text-center text-dim">No data</td></tr>
+                )}
+                {Object.entries(bySymbol).map(([sym, val]: [string, any]) => (
+                  <tr key={sym}>
+                    <td className="font-mono font-semibold text-[12px]">{sym}</td>
+                    <td className="font-mono text-[12px] text-dim">{val.count}</td>
+                    <td>{winRateCell(val.winRate)}</td>
+                    <td>{pnl(val.pnl)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

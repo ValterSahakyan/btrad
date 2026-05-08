@@ -1,5 +1,5 @@
-import { Badge } from '../ui/badge';
 import { fetchApiSafe } from '@/services/api';
+import { headers } from 'next/headers';
 
 type Status = {
   mode: string;
@@ -10,43 +10,67 @@ type Status = {
   openTrades: number;
 };
 
-export async function Header() {
-  const status = await fetchApiSafe<Status | null>('/status', null);
+function Pill({ label, tone }: { label: string; tone: 'pos' | 'neg' | 'warn' | 'dim' | 'acc' }) {
+  const styles = {
+    pos:  'bg-positive/10 text-positive border-positive/20',
+    neg:  'bg-danger/10 text-danger border-danger/20',
+    warn: 'bg-warning/10 text-warning border-warning/20',
+    dim:  'bg-white/5 text-muted border-white/10',
+    acc:  'bg-accent/10 text-accent border-accent/20',
+  };
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border ${styles[tone]}`}>
+      {label}
+    </span>
+  );
+}
 
-  const mode = status?.mode ?? 'testnet';
-  const liveEnabled = status?.realTradingEnabled ?? false;
-  const autoExecute = status?.requireDashboardConfirmation === false;
+export async function Topbar() {
+  const reqHeaders = await headers();
+  const pathname = reqHeaders.get('x-pathname') ?? '';
+
+  const pageTitle: Record<string, string> = {
+    '/overview': 'Overview',
+    '/hot-coins': 'Scanner',
+    '/signals': 'Signals',
+    '/trades': 'Trades',
+    '/performance': 'Performance',
+    '/settings': 'Settings',
+    '/logs': 'Logs',
+  };
+  const title = pageTitle[pathname] ?? 'Dashboard';
+
+  const status = await fetchApiSafe<Status | null>('/status', null);
   const paused = status?.botStatus === 'paused';
+  const liveMode = status?.mode === 'live';
+  const realOn = status?.realTradingEnabled ?? false;
+  const autoExec = status?.requireDashboardConfirmation === false;
 
   return (
-    <header className="app-header mb-6 flex flex-col gap-3 rounded-[28px] border border-white/10 bg-white/5 p-5 lg:flex-row lg:items-center lg:justify-between">
-      <div>
-        <div className="text-xs uppercase tracking-[0.24em] text-muted">Futures trading console</div>
-        <h1 className="text-3xl font-semibold">PerpScout AI</h1>
-        {status && (
-          <div className="mt-1 flex gap-4 text-xs text-muted">
-            <span>{status.activeSignals} active signals</span>
-            <span>{status.openTrades} open trades</span>
-          </div>
-        )}
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {!status && <Badge tone="danger">Backend Offline</Badge>}
-        {paused ? (
-          <Badge tone="danger">Bot Paused</Badge>
-        ) : (
-          <Badge tone="positive">Bot Running</Badge>
-        )}
-        <Badge tone={mode === 'live' ? 'positive' : 'warning'}>
-          {mode === 'live' ? 'Live Mode' : 'Testnet Mode'}
-        </Badge>
-        <Badge tone={liveEnabled ? 'positive' : 'danger'}>
-          {liveEnabled ? 'Real Trading ON' : 'Real Trading OFF'}
-        </Badge>
-        <Badge tone={autoExecute ? 'danger' : 'warning'}>
-          {autoExecute ? 'Auto-Execute ON' : 'Manual Approval'}
-        </Badge>
-      </div>
-    </header>
+    <div className="app-topbar">
+      <span className="text-[13px] font-semibold text-white mr-auto">{title}</span>
+
+      {!status && <Pill label="Backend Offline" tone="neg" />}
+
+      {status && (
+        <>
+          {status.activeSignals > 0 && (
+            <span className="text-[11px] text-muted">
+              <span className="text-warning font-mono">{status.activeSignals}</span> signals
+            </span>
+          )}
+          {status.openTrades > 0 && (
+            <span className="text-[11px] text-muted">
+              <span className="text-positive font-mono">{status.openTrades}</span> open
+            </span>
+          )}
+          <span className="w-px h-3 bg-border mx-1" />
+          <Pill label={paused ? 'Paused' : 'Running'} tone={paused ? 'neg' : 'pos'} />
+          <Pill label={liveMode ? 'Live' : 'Testnet'} tone={liveMode ? 'acc' : 'warn'} />
+          {realOn && <Pill label="Real ON" tone="pos" />}
+          {autoExec && <Pill label="Auto-Exec" tone="neg" />}
+        </>
+      )}
+    </div>
   );
 }

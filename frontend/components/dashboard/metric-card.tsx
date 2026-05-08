@@ -1,4 +1,3 @@
-import { Card } from '../ui/card';
 import { cn } from '@/lib/utils';
 
 export function MetricCard({
@@ -6,26 +5,30 @@ export function MetricCard({
   value,
   hint,
   tone,
+  mono = true,
 }: {
   label: string;
   value: string;
   hint?: string;
   tone?: 'positive' | 'danger' | 'warning' | 'neutral';
+  mono?: boolean;
 }) {
   return (
-    <Card className="space-y-2">
-      <div className="text-xs uppercase tracking-[0.18em] text-muted">{label}</div>
+    <div className="panel p-3.5 flex flex-col gap-1">
+      <div className="text-[10px] uppercase tracking-widest text-dim font-medium">{label}</div>
       <div
         className={cn(
-          'text-2xl font-semibold',
+          'text-xl font-semibold leading-tight',
+          mono && 'font-mono',
           tone === 'positive' && 'text-positive',
-          tone === 'danger' && 'text-danger',
-          tone === 'warning' && 'text-yellow-300',
+          tone === 'danger'   && 'text-danger',
+          tone === 'warning'  && 'text-warning',
+          !tone              && 'text-white',
         )}
       >
         {value}
       </div>
-      {hint ? <div className="text-sm text-muted">{hint}</div> : null}
-    </Card>
+      {hint && <div className="text-[11px] text-dim leading-tight">{hint}</div>}
+    </div>
   );
 }

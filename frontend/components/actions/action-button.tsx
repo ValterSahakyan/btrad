@@ -12,6 +12,7 @@ export function ActionButton({
   method = 'POST',
   variant = 'secondary',
   disabled = false,
+  size = 'sm',
   body,
   confirmMessage,
   successMessage,
@@ -19,8 +20,9 @@ export function ActionButton({
   label: string;
   path: string;
   method?: 'POST' | 'PATCH';
-  variant?: 'default' | 'secondary' | 'danger';
+  variant?: 'default' | 'secondary' | 'danger' | 'ghost';
   disabled?: boolean;
+  size?: 'sm' | 'md';
   body?: Record<string, unknown>;
   confirmMessage?: string;
   successMessage?: string;
@@ -31,7 +33,6 @@ export function ActionButton({
 
   const onClick = async () => {
     if (confirmMessage && !window.confirm(confirmMessage)) return;
-
     setPending(true);
     try {
       const res = await fetch(
@@ -60,8 +61,8 @@ export function ActionButton({
 
   return (
     <>
-      <Button onClick={onClick} variant={variant} disabled={disabled || pending}>
-        {pending ? 'Working...' : label}
+      <Button onClick={onClick} variant={variant} size={size} disabled={disabled || pending}>
+        {pending ? '…' : label}
       </Button>
       <ToastContainer toasts={toast.toasts} onDismiss={toast.dismiss} />
     </>

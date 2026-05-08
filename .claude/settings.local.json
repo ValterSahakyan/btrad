@@ -43,7 +43,9 @@
       "Bash(tasklist /FI \"IMAGENAME eq node.exe\")",
       "PowerShell(Stop-Process -Id 13908 -Force)",
       "PowerShell(Get-Process -Name node -ErrorAction SilentlyContinue)",
-      "PowerShell(Get-NetTCPConnection -LocalPort 3333 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }; Write-Output \"done\")"
+      "PowerShell(Get-NetTCPConnection -LocalPort 3333 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }; Write-Output \"done\")",
+      "Bash(python skills/ui-ux-pro-max/scripts/search.py \"pro trading dashboard fintech crypto dark mode data-dense Bloomberg TradingView\" --design-system -p \"PerpScout AI\" -f markdown)",
+      "Bash(python \"C:\\\\Users\\\\User\\\\.claude\\\\skills\\\\ui-ux-pro-max\\\\scripts\\\\search.py\" \"pro trading dashboard fintech crypto dark mode data-dense Bloomberg TradingView\" --design-system -p \"PerpScout AI\" -f markdown)"
     ]
   }
 }

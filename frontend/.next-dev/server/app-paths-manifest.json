@@ -1,4 +1,9 @@
 {
-  "/page": "app/page.js",
-  "/overview/page": "app/overview/page.js"
+  "/overview/page": "app/overview/page.js",
+  "/settings/page": "app/settings/page.js",
+  "/performance/page": "app/performance/page.js",
+  "/trades/page": "app/trades/page.js",
+  "/signals/page": "app/signals/page.js",
+  "/hot-coins/page": "app/hot-coins/page.js",
+  "/logs/page": "app/logs/page.js"
 }

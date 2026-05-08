@@ -10,20 +10,14 @@ export type Toast = {
   type: ToastType;
 };
 
-type ToastItemProps = {
-  toast: Toast;
-  onDismiss: (id: number) => void;
-};
-
-function ToastItem({ toast, onDismiss }: ToastItemProps) {
+function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: (id: number) => void }) {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    // Trigger enter animation
     const show = requestAnimationFrame(() => setVisible(true));
     const timer = setTimeout(() => {
       setVisible(false);
-      setTimeout(() => onDismiss(toast.id), 300);
+      setTimeout(() => onDismiss(toast.id), 250);
     }, 3500);
     return () => {
       cancelAnimationFrame(show);
@@ -34,19 +28,16 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
   return (
     <div
       className={[
-        'flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm shadow-lg backdrop-blur transition-all duration-300',
+        'flex items-center gap-2.5 rounded border px-3 py-2.5 text-[12px] shadow-xl transition-all duration-250',
         toast.type === 'success'
-          ? 'border-green-500/30 bg-green-500/10 text-green-300'
-          : 'border-red-500/30 bg-red-500/10 text-red-300',
-        visible ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0',
+          ? 'border-positive/25 bg-surface text-positive'
+          : 'border-danger/25 bg-surface text-danger',
+        visible ? 'translate-y-0 opacity-100' : 'translate-y-1 opacity-0',
       ].join(' ')}
     >
-      <span className="text-base">{toast.type === 'success' ? '✓' : '✕'}</span>
-      <span>{toast.message}</span>
-      <button
-        onClick={() => onDismiss(toast.id)}
-        className="ml-2 opacity-50 hover:opacity-100"
-      >
+      <span className="font-mono text-[10px]">{toast.type === 'success' ? '✓' : '✕'}</span>
+      <span className="text-white/90">{toast.message}</span>
+      <button onClick={() => onDismiss(toast.id)} className="ml-2 text-muted hover:text-white cursor-pointer">
         ✕
       </button>
     </div>
@@ -55,7 +46,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
 
 export function ToastContainer({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: number) => void }) {
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2">
+    <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-2">
       {toasts.map((t) => (
         <ToastItem key={t.id} toast={t} onDismiss={onDismiss} />
       ))}

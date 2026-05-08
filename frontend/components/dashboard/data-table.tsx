@@ -1,44 +1,44 @@
 import { ReactNode } from 'react';
-import { Card } from '../ui/card';
 
 export function DataTable({
   title,
   headers,
   rows,
+  action,
 }: {
   title: string;
   headers: string[];
   rows: ReactNode[][];
+  action?: ReactNode;
 }) {
   return (
-    <Card>
-      <div className="mb-4 flex items-center justify-between">
-        <div className="text-lg font-semibold">{title}</div>
-        {rows.length > 0 && (
-          <div className="rounded-full bg-white/10 px-2.5 py-0.5 text-xs text-muted">{rows.length}</div>
-        )}
+    <div className="panel flex flex-col overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
+        <span className="text-[12px] font-semibold text-white">{title}</span>
+        <div className="flex items-center gap-2">
+          {rows.length > 0 && (
+            <span className="text-[11px] font-mono text-dim">{rows.length}</span>
+          )}
+          {action}
+        </div>
       </div>
       {rows.length === 0 ? (
-        <div className="py-8 text-center text-sm text-muted">No data</div>
+        <div className="py-10 text-center text-[12px] text-dim">No data</div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="app-table min-w-full text-sm">
+          <table className="t-table">
             <thead>
-              <tr className="border-b border-white/10 text-left text-muted">
-                {headers.map((header) => (
-                  <th key={header} className="px-3 py-2 font-medium">
-                    {header}
-                  </th>
+              <tr>
+                {headers.map((h) => (
+                  <th key={h}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {rows.map((row, rowIndex) => (
-                <tr key={rowIndex} className="border-b border-white/5 last:border-none hover:bg-white/[0.02]">
-                  {row.map((cell, cellIndex) => (
-                    <td key={cellIndex} className="px-3 py-3">
-                      {cell}
-                    </td>
+              {rows.map((row, i) => (
+                <tr key={i}>
+                  {row.map((cell, j) => (
+                    <td key={j}>{cell}</td>
                   ))}
                 </tr>
               ))}
@@ -46,6 +46,6 @@ export function DataTable({
           </table>
         </div>
       )}
-    </Card>
+    </div>
   );
 }
