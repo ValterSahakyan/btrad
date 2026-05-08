@@ -23,10 +23,11 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response,
   ) {
     const token = await this.authService.verifyAndLogin(body.address, body.signature);
+    const cookieOptions = getSessionCookieOptions();
     response.cookie('perpscout_session', token, {
+      ...cookieOptions,
       httpOnly: true,
       sameSite: 'strict',
-      secure: process.env.NODE_ENV === 'production',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
     return { success: true, address: body.address };
@@ -36,7 +37,7 @@ export class AuthController {
   async logout(@Req() request: Request, @Res({ passthrough: true }) response: Response) {
     const token = request.cookies?.['perpscout_session'] as string | undefined;
     if (token) await this.authService.logout(token);
-    response.clearCookie('perpscout_session');
+    response.clearCookie('perpscout_session', getSessionCookieOptions());
     return { success: true };
   }
 
@@ -48,4 +49,43 @@ export class AuthController {
     if (!address) return { authenticated: false };
     return { authenticated: true, address };
   }
+}
+
+function getSessionCookieOptions(): { secure: boolean; domain?: string; path: string } {
+  const secure = process.env.NODE_ENV === 'production';
+  const explicitDomain = process.env.AUTH_COOKIE_DOMAIN?.trim();
+  if (explicitDomain) {
+    return {
+      secure,
+      domain: explicitDomain.replace(/^\./, ''),
+      path: '/',
+    };
+  }
+
+  const frontendUrl = process.env.FRONTEND_URL?.split(',')[0]?.trim();
+  if (!frontendUrl) {
+    return { secure, path: '/' };
+  }
+
+  try {
+    const hostname = new URL(frontendUrl).hostname;
+    if (isLocalHost(hostname) || isIpv4(hostname)) {
+      return { secure, path: '/' };
+    }
+    return {
+      secure,
+      domain: hostname,
+      path: '/',
+    };
+  } catch {
+    return { secure, path: '/' };
+  }
+}
+
+function isLocalHost(hostname: string): boolean {
+  return hostname === 'localhost' || hostname.endsWith('.localhost');
+}
+
+function isIpv4(hostname: string): boolean {
+  return /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname);
 }
