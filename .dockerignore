@@ -3,7 +3,10 @@
 node_modules
 **/node_modules
 **/.next
+**/.next-dev
+**/.next-prod
 **/dist
+**/*.tsbuildinfo
 coverage
 *.log
 .env
