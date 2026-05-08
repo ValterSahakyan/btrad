@@ -53,14 +53,14 @@ model BotSettings {
   maxDailyLossPercent          Float    @default(3)
   maxOpenTrades                Int      @default(2)
   maxConsecutiveLosses         Int      @default(3)
-  minConfidenceScore           Float    @default(70)
+  minConfidenceScore           Float    @default(65)
   minRiskReward                Float    @default(1.5)
   scannerIntervalSeconds       Int      @default(60)
   signalExpirationMinutes      Int      @default(15)
   maxSymbolsPerScan            Int      @default(50)
-  minHotScoreForScan           Float    @default(55)
-  minPositionUsd               Float    @default(1)
-  maxPositionUsd               Float    @default(3)
+  minHotScoreForScan           Float    @default(45)
+  minPositionUsd               Float    @default(5)
+  maxPositionUsd               Float    @default(20)
 
   // Strategy: Breakout + Volume
   breakoutEnabled              Boolean  @default(true)

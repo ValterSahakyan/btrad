@@ -5,6 +5,7 @@ import { startTransition, useState } from 'react';
 import { Button } from '../ui/button';
 import { ToastContainer } from '../ui/toast';
 import { useToast } from '@/hooks/use-toast';
+import { useConfirm } from '../ui/confirm-modal';
 
 export function ActionButton({
   label,
@@ -15,6 +16,8 @@ export function ActionButton({
   size = 'sm',
   body,
   confirmMessage,
+  confirmTitle,
+  confirmVariant,
   successMessage,
 }: {
   label: string;
@@ -25,14 +28,26 @@ export function ActionButton({
   size?: 'sm' | 'md';
   body?: Record<string, unknown>;
   confirmMessage?: string;
+  confirmTitle?: string;
+  confirmVariant?: 'default' | 'danger';
   successMessage?: string;
 }) {
   const [pending, setPending] = useState(false);
   const toast = useToast();
   const router = useRouter();
+  const { confirm, modal } = useConfirm();
 
   const onClick = async () => {
-    if (confirmMessage && !window.confirm(confirmMessage)) return;
+    if (confirmMessage) {
+      const ok = await confirm({
+        title: confirmTitle,
+        message: confirmMessage,
+        confirmLabel: label,
+        variant: confirmVariant ?? (variant === 'danger' ? 'danger' : 'default'),
+      });
+      if (!ok) return;
+    }
+
     setPending(true);
     try {
       const res = await fetch(
@@ -61,6 +76,7 @@ export function ActionButton({
 
   return (
     <>
+      {modal}
       <Button onClick={onClick} variant={variant} size={size} disabled={disabled || pending}>
         {pending ? '…' : label}
       </Button>

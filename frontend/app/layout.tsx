@@ -1,9 +1,24 @@
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
+import { Inter, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Topbar } from '@/components/layout/header';
 import { TradeVoiceNotifier } from '@/components/layout/trade-voice-notifier';
+
+const inter = Inter({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600', '700'],
+  variable: '--font-inter',
+  display: 'swap',
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  variable: '--font-mono',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'BTRAD — Futures Terminal',
@@ -17,14 +32,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   if (isPublic) {
     return (
-      <html lang="en">
+      <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
         <body suppressHydrationWarning>{children}</body>
       </html>
     );
   }
 
   return (
-    <html lang="en">
+    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
       <body suppressHydrationWarning>
         <div className="app-shell">
           <Sidebar />

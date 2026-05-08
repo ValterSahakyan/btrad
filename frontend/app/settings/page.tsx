@@ -81,8 +81,8 @@ export default async function SettingsPage() {
               Start syncs symbols and runs one scanner cycle immediately. Stop pauses new signals and orders.
             </p>
             <div className="flex gap-2">
-              <ActionButton label="Start Bot" path="/bot/start" variant="default" size="sm" confirmMessage="Start the bot, sync symbols, and run the scanner now?" />
-              <ActionButton label="Stop Bot"  path="/bot/stop"  variant="danger"   size="sm" confirmMessage="Stop the bot now?" />
+              <ActionButton label="Start Bot" path="/bot/start" variant="default" size="sm" confirmTitle="Start Bot" confirmMessage="Unpause the bot, sync symbols from Binance, and run one scanner cycle immediately?" />
+              <ActionButton label="Stop Bot"  path="/bot/stop"  variant="danger"   size="sm" confirmTitle="Stop Bot" confirmMessage="Pause the bot? No new signals or trades will be opened until you start it again." confirmVariant="danger" />
             </div>
           </div>
         </div>

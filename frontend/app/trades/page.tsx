@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { useConfirm } from '@/components/ui/confirm-modal';
 import { cn, currency, number } from '@/lib/utils';
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3333/api';
@@ -47,6 +48,7 @@ export default function TradesPage() {
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [closingId, setClosingId] = useState<string | null>(null);
+  const { confirm, modal } = useConfirm();
 
   const fetchTrades = useCallback(async () => {
     try {
@@ -67,7 +69,15 @@ export default function TradesPage() {
   }, [fetchTrades]);
 
   const handleClose = async (tradeId: string, paper: boolean) => {
-    if (!confirm(paper ? 'Close this paper trade?' : 'Close this live trade at market price on Binance?')) return;
+    const ok = await confirm({
+      title: paper ? 'Close Paper Trade' : 'Close Live Trade',
+      message: paper
+        ? 'Mark this simulated paper trade as closed?'
+        : 'Place a market close order on Binance now? This will exit the position at the current market price.',
+      confirmLabel: 'Close Trade',
+      variant: paper ? 'default' : 'danger',
+    });
+    if (!ok) return;
     setClosingId(tradeId);
     try {
       await fetch(`${API}/trades/${tradeId}/${paper ? 'close-paper' : 'close-live'}`, {
@@ -84,6 +94,7 @@ export default function TradesPage() {
 
   return (
     <div className="space-y-3">
+      {modal}
       {/* Header bar */}
       <div className="panel px-4 py-2.5 flex items-center gap-3">
         <span className="text-[12px] font-semibold text-white mr-auto">Trade History</span>

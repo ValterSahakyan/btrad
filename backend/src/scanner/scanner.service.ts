@@ -71,9 +71,16 @@ export class ScannerService {
     }
     await this.logsService.info('scanner', 'Starting market scan');
     const regime = await this.marketRegimeService.getRegime();
+    await this.logsService.info('scanner', `Market regime: ${regime.regime}`, {
+      score: regime.score,
+      volatility: regime.volatility,
+      btcTrend: regime.btcTrend,
+      ethTrend: regime.ethTrend,
+      caution: regime.caution,
+    });
 
     const maxSymbols = settings?.maxSymbolsPerScan ?? 50;
-    const minHotScore = settings?.minHotScoreForScan ?? 55;
+    const minHotScore = settings?.minHotScoreForScan ?? 45;
 
     const [enabledSymbols, tickers] = await Promise.all([
       this.prisma.symbol.findMany({ where: { isEnabled: true } }),
@@ -112,12 +119,14 @@ export class ScannerService {
         const avgVolume = average(volumes15m.slice(-20));
         const volumeSpikeRatio = avgVolume === 0 ? 0 : (volumes15m.at(-1) ?? 0) / avgVolume;
         const liquidity = Math.max(1, Math.min(100, volume24h / 100_000));
+        // Convert raw coin open interest to USD notional for scoring
+        const openInterestUsd = openInterest * price;
         const hotScore = this.hotScoreService.calculate({
           volume24h,
           priceChange24h,
           volumeSpikeRatio,
           volatility,
-          openInterest,
+          openInterest: openInterestUsd,
           fundingRate,
           spread,
           liquidity,
@@ -129,7 +138,9 @@ export class ScannerService {
           data: { symbolId: symbolRecord.id, price, volume24h, priceChange24h, fundingRate, openInterest, spread, volatility, hotScore },
         });
 
-        if (hotScore < minHotScore || spread > 0.8 || liquidity < 10) continue;
+        if (hotScore < minHotScore || spread > 0.8 || liquidity < 10) {
+          continue;
+        }
 
         const strategyConfig = buildStrategyConfig(settings);
 
@@ -166,6 +177,7 @@ export class ScannerService {
           expiresAt,
           marketRegime: regime.regime,
           stepSize: symbolRecord.stepSize,
+          minNotional: symbolRecord.minNotional,
         });
 
         const confidenceScore = this.confidenceScoreService.calculate({
@@ -176,11 +188,15 @@ export class ScannerService {
           riskScore: risk.riskScore,
         });
 
-        if (!risk.allowed || confidenceScore < (settings?.minConfidenceScore ?? 70)) {
+        const minConfidence = settings?.minConfidenceScore ?? 65;
+        if (!risk.allowed || confidenceScore < minConfidence) {
           await this.logsService.warn('scanner', 'Signal skipped by filters', {
             symbol: symbolRecord.symbol,
-            confidenceScore,
+            confidenceScore: Number(confidenceScore.toFixed(1)),
+            minConfidence,
+            riskAllowed: risk.allowed,
             reasons: risk.messages,
+            regime: regime.regime,
           });
           continue;
         }
@@ -249,7 +265,7 @@ export class ScannerService {
       }
     }
 
-    await this.logsService.info('scanner', 'Completed market scan', { processed, signalsCreated });
+    await this.logsService.info('scanner', 'Completed market scan', { processed, signalsCreated, symbolsTotal: sorted.length });
     return { processed, signalsCreated };
   }
 

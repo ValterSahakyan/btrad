@@ -27,6 +27,7 @@ export class RiskEngineService {
     expiresAt: Date;
     marketRegime: string;
     stepSize?: number;
+    minNotional?: number;
   }): Promise<RiskValidationResult> {
     const settings = await this.prisma.botSettings.findFirst();
     const openTrades = await this.prisma.trade.count({
@@ -54,7 +55,7 @@ export class RiskEngineService {
     const maxLeverage = settings?.maxLeverage ?? 5;
     const minRiskReward = settings?.minRiskReward ?? 1.5;
     const defaultLeverage = settings?.defaultLeverage ?? 3;
-    const minPositionUsd = settings?.minPositionUsd ?? 3;
+    const minPositionUsd = settings?.minPositionUsd ?? 5;
 
     const dailyLoss = closedTrades
       .filter((trade) => (trade.pnl ?? 0) < 0)
@@ -63,7 +64,7 @@ export class RiskEngineService {
     const consecutiveLosses = closedTrades.findIndex((trade) => (trade.pnl ?? 0) > 0);
     const effectiveConsecutiveLosses = consecutiveLosses === -1 ? closedTrades.length : consecutiveLosses;
 
-    const maxPositionUsd = settings?.maxPositionUsd ?? 3;
+    const maxPositionUsd = settings?.maxPositionUsd ?? 20;
     const positionSize = this.positionSizeService.calculate(
       usdtBalance,
       riskPerTradePercent,
@@ -72,6 +73,9 @@ export class RiskEngineService {
       input.stepSize,
       maxPositionUsd,
     );
+
+    // Use the higher of the settings floor and the exchange's own minimum notional
+    const effectiveMinNotional = Math.max(minPositionUsd, input.minNotional ?? 0);
 
     const messages: string[] = [];
     if (input.expiresAt.getTime() < Date.now()) messages.push('Signal expired');
@@ -83,7 +87,12 @@ export class RiskEngineService {
     if (input.marketRegime === 'no_trade') messages.push('Market regime blocked');
     if (positionSize.quantity <= 0) messages.push('Invalid position size');
     const notionalUsd = positionSize.quantity * input.entryPrice;
-    if (positionSize.quantity > 0 && notionalUsd < minPositionUsd) messages.push(`Position notional $${notionalUsd.toFixed(2)} below minimum $${minPositionUsd}`);
+    if (positionSize.quantity > 0 && notionalUsd < effectiveMinNotional) {
+      const hint = maxPositionUsd < effectiveMinNotional
+        ? ` (raise maxPositionUsd above $${effectiveMinNotional.toFixed(0)} in Settings)`
+        : '';
+      messages.push(`Position notional $${notionalUsd.toFixed(2)} below minimum $${effectiveMinNotional.toFixed(2)}${hint}`);
+    }
 
     const riskScore =
       messages.length === 0

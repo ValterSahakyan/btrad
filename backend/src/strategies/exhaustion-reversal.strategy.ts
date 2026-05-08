@@ -58,8 +58,8 @@ export class ExhaustionReversalStrategy implements TradingStrategy {
       const risk = stopLoss - currentPrice;
       if (risk <= 0 || risk / currentPrice > cfg.maxSlPercent / 100) return null;
 
-      const takeProfit1 = Math.max(currentPrice - risk * 1.5, currentVwap);
-      const takeProfit2 = currentPrice - risk * 2.5;
+      const takeProfit1 = currentPrice - risk * 1.5;
+      const takeProfit2 = Math.min(currentPrice - risk * 2.5, currentVwap);
       const riskReward = (currentPrice - takeProfit1) / risk;
       if (riskReward < context.minRiskReward) return null;
 
@@ -98,8 +98,8 @@ export class ExhaustionReversalStrategy implements TradingStrategy {
       const risk = currentPrice - stopLoss;
       if (risk <= 0 || risk / currentPrice > cfg.maxSlPercent / 100) return null;
 
-      const takeProfit1 = Math.min(currentPrice + risk * 1.5, currentVwap);
-      const takeProfit2 = currentPrice + risk * 2.5;
+      const takeProfit1 = currentPrice + risk * 1.5;
+      const takeProfit2 = Math.max(currentPrice + risk * 2.5, currentVwap);
       const riskReward = (takeProfit1 - currentPrice) / risk;
       if (riskReward < context.minRiskReward) return null;
 

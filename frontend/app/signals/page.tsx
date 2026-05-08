@@ -73,7 +73,8 @@ export default async function SignalsPage() {
           body={{ olderThanDays: 0 }}
           variant="ghost"
           size="sm"
-          confirmMessage="Delete skipped, expired, failed, and cancelled signals with no linked trades?"
+          confirmTitle="Clear Inactive Signals"
+          confirmMessage="Delete all skipped, expired, failed, and cancelled signals that have no linked trades? This cannot be undone."
           successMessage="Inactive signals cleared"
         />
       </div>
@@ -122,7 +123,9 @@ export default async function SignalsPage() {
                           variant="default"
                           size="sm"
                           disabled={!canAct || !liveEnabled}
-                          confirmMessage="Place a real Binance Futures order?"
+                          confirmTitle="Execute Live Order"
+                          confirmMessage={`Place a real Binance Futures ${sig.direction} order for ${sig.symbol?.symbol ?? sig.symbol}? Entry ~${number(sig.entryPrice, 4)}, SL ${number(sig.stopLoss, 4)}, TP ${number(sig.takeProfit1, 4)}.`}
+                          confirmVariant="danger"
                         />
                         <ActionButton
                           label="Paper"

@@ -27,7 +27,7 @@ export class MarketRegimeService {
     let regime: MarketRegimeResult['regime'] = 'sideways';
     let score = 60;
 
-    if (btcVolatilityPct > 3 || Math.abs(btcMove) > 4) {
+    if (btcVolatilityPct > 4 || Math.abs(btcMove) > 6) {
       regime = 'no_trade';
       score = 20;
       caution.push('BTC volatility is extreme');
