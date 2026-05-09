@@ -399,5 +399,25 @@ function buildStrategyConfig(settings: Record<string, unknown> | null): Strategy
       volumeDeclineRatio: s?.reversionVolumeDeclineRatio ?? 0.6,
       maxSlPercent: s?.reversionMaxSlPercent ?? 5.0,
     },
+    trendReclaim: {
+      enabled: s?.trendReclaimEnabled ?? true,
+      emaBufferAtr: s?.trendReclaimEmaBufferAtr ?? 0.35,
+      reclaimVolumeRatio: s?.trendReclaimVolumeRatio ?? 1.1,
+      maxSlPercent: s?.trendReclaimMaxSlPercent ?? 3.5,
+      tp1Multiplier: s?.trendReclaimTp1Multiplier ?? 1.4,
+      tp2Multiplier: s?.trendReclaimTp2Multiplier ?? 2.3,
+      minHotScore: s?.trendReclaimMinHotScore ?? 50,
+    },
+    rangeBounce: {
+      enabled: s?.rangeBounceEnabled ?? true,
+      lookbackPeriod: s?.rangeBounceLookbackPeriod ?? 24,
+      proximityAtr: s?.rangeBounceProximityAtr ?? 0.8,
+      rsiLongMax: s?.rangeBounceRsiLongMax ?? 45,
+      rsiShortMin: s?.rangeBounceRsiShortMin ?? 55,
+      maxSlPercent: s?.rangeBounceMaxSlPercent ?? 3.2,
+      tp1Multiplier: s?.rangeBounceTp1Multiplier ?? 1.3,
+      tp2Multiplier: s?.rangeBounceTp2Multiplier ?? 2.0,
+      minHotScore: s?.rangeBounceMinHotScore ?? 35,
+    },
   };
 }

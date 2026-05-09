@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Param, Post, Req } from '@nestjs/common';
-import { Request } from 'express';
+import { Body, Controller, Get, Param, Post, Query, Req, Res } from '@nestjs/common';
+import { Request, Response } from 'express';
 import { CleanupSignalsDto } from './dto/cleanup-signals.dto';
 import { SignalsService } from './signals.service';
 
@@ -10,6 +10,14 @@ export class SignalsController {
   @Get()
   list() {
     return this.signalsService.list();
+  }
+
+  @Get('/export/daily')
+  async exportDaily(@Query('date') date: string | undefined, @Res() response: Response) {
+    const result = await this.signalsService.exportDailyCsv(date);
+    response.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    response.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+    response.send(result.csv);
   }
 
   @Get('/:id')

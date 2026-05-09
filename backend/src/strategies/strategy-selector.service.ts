@@ -3,7 +3,9 @@ import { StrategySignalCandidate } from '../common/types/trading.types';
 import { BreakoutVolumeStrategy } from './breakout-volume.strategy';
 import { ExhaustionReversalStrategy } from './exhaustion-reversal.strategy';
 import { PullbackContinuationStrategy } from './pullback-continuation.strategy';
+import { RangeBounceStrategy } from './range-bounce.strategy';
 import { StrategyContext } from './strategy.interface';
+import { TrendReclaimStrategy } from './trend-reclaim.strategy';
 
 @Injectable()
 export class StrategySelectorService {
@@ -11,6 +13,8 @@ export class StrategySelectorService {
     private readonly breakoutVolumeStrategy: BreakoutVolumeStrategy,
     private readonly pullbackContinuationStrategy: PullbackContinuationStrategy,
     private readonly exhaustionReversalStrategy: ExhaustionReversalStrategy,
+    private readonly trendReclaimStrategy: TrendReclaimStrategy,
+    private readonly rangeBounceStrategy: RangeBounceStrategy,
   ) {}
 
   evaluate(context: StrategyContext): StrategySignalCandidate | null {
@@ -20,6 +24,8 @@ export class StrategySelectorService {
       this.breakoutVolumeStrategy,
       this.pullbackContinuationStrategy,
       this.exhaustionReversalStrategy,
+      this.trendReclaimStrategy,
+      this.rangeBounceStrategy,
     ]) {
       const signal = strategy.evaluate(context);
       if (signal) candidates.push(signal);

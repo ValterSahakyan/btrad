@@ -6,7 +6,7 @@ import { PositionMonitorService } from './position-monitor.service';
 export class PositionMonitorScheduler {
   constructor(private readonly positionMonitorService: PositionMonitorService) {}
 
-  @Cron(CronExpression.EVERY_MINUTE)
+  @Cron('*/5 * * * * *')
   async handleCron(): Promise<void> {
     await this.positionMonitorService.run();
   }

@@ -30,10 +30,34 @@ export interface ReversionConfig {
   maxSlPercent: number;
 }
 
+export interface TrendReclaimConfig {
+  enabled: boolean;
+  emaBufferAtr: number;
+  reclaimVolumeRatio: number;
+  maxSlPercent: number;
+  tp1Multiplier: number;
+  tp2Multiplier: number;
+  minHotScore: number;
+}
+
+export interface RangeBounceConfig {
+  enabled: boolean;
+  lookbackPeriod: number;
+  proximityAtr: number;
+  rsiLongMax: number;
+  rsiShortMin: number;
+  maxSlPercent: number;
+  tp1Multiplier: number;
+  tp2Multiplier: number;
+  minHotScore: number;
+}
+
 export interface StrategyConfig {
   breakout: BreakoutConfig;
   pullback: PullbackConfig;
   reversion: ReversionConfig;
+  trendReclaim: TrendReclaimConfig;
+  rangeBounce: RangeBounceConfig;
 }
 
 export interface StrategyContext {

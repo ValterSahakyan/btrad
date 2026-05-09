@@ -11,11 +11,6 @@
       "static/chunks/main-app.js",
       "static/chunks/app/error.js"
     ],
-    "/settings/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/settings/page.js"
-    ],
     "/trades/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",

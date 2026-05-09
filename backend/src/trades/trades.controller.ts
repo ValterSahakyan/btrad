@@ -1,5 +1,5 @@
-import { Controller, Get, Param, Post, Req } from '@nestjs/common';
-import { Request } from 'express';
+import { Controller, Get, Param, Post, Query, Req, Res } from '@nestjs/common';
+import { Request, Response } from 'express';
 import { TradesService } from './trades.service';
 
 @Controller('/api/trades')
@@ -9,6 +9,14 @@ export class TradesController {
   @Get()
   list() {
     return this.tradesService.list();
+  }
+
+  @Get('/export/daily')
+  async exportDaily(@Query('date') date: string | undefined, @Res() response: Response) {
+    const result = await this.tradesService.exportDailyCsv(date);
+    response.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    response.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+    response.send(result.csv);
   }
 
   @Get('/:id')

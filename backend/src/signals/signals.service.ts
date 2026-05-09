@@ -79,4 +79,102 @@ export class SignalsService {
           : `Deleted ${deleted.count} terminal signal${deleted.count === 1 ? '' : 's'} with no linked trades.`,
     };
   }
+
+  async exportDailyCsv(date?: string): Promise<{ filename: string; csv: string }> {
+    const { start, end, label } = resolveUtcDayRange(date);
+    const signals = await this.prisma.signal.findMany({
+      where: {
+        createdAt: {
+          gte: start,
+          lt: end,
+        },
+      },
+      include: {
+        symbol: true,
+        trades: {
+          select: {
+            id: true,
+            pnl: true,
+            status: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const header = [
+      'id',
+      'createdAtUtc',
+      'expiresAtUtc',
+      'symbol',
+      'direction',
+      'strategy',
+      'status',
+      'entryPrice',
+      'stopLoss',
+      'takeProfit1',
+      'takeProfit2',
+      'leverage',
+      'positionSize',
+      'riskAmount',
+      'riskReward',
+      'hotScore',
+      'confidenceScore',
+      'tradeCount',
+      'tradeStatuses',
+      'tradeTotalPnl',
+    ];
+
+    const rows = signals.map((signal) => [
+      signal.id,
+      signal.createdAt.toISOString(),
+      signal.expiresAt.toISOString(),
+      signal.symbol.symbol,
+      signal.direction,
+      signal.strategy,
+      signal.status,
+      num(signal.entryPrice),
+      num(signal.stopLoss),
+      num(signal.takeProfit1),
+      num(signal.takeProfit2),
+      num(signal.leverage),
+      num(signal.positionSize),
+      num(signal.riskAmount),
+      num(signal.riskReward),
+      num(signal.hotScore),
+      num(signal.confidenceScore),
+      num(signal.trades.length),
+      signal.trades.map((trade) => trade.status).join('|'),
+      num(signal.trades.reduce((sum, trade) => sum + (trade.pnl ?? 0), 0)),
+    ]);
+
+    return {
+      filename: `signals-${label}.csv`,
+      csv: toCsv(header, rows),
+    };
+  }
+}
+
+function resolveUtcDayRange(date?: string): { start: Date; end: Date; label: string } {
+  const parsed = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? new Date(`${date}T00:00:00.000Z`) : new Date();
+  const start = new Date(Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate(), 0, 0, 0, 0));
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+  const label = start.toISOString().slice(0, 10);
+  return { start, end, label };
+}
+
+function toCsv(header: string[], rows: Array<Array<string | number>>): string {
+  return [header, ...rows].map((row) => row.map(csvCell).join(',')).join('\n');
+}
+
+function csvCell(value: string | number): string {
+  const text = String(value ?? '');
+  if (text.includes(',') || text.includes('"') || text.includes('\n')) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
+}
+
+function num(value: number | null | undefined): string {
+  return value === null || value === undefined ? '' : String(value);
 }

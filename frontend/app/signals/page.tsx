@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { ActionButton } from '@/components/actions/action-button';
+import { DailyExportControls } from '@/components/actions/daily-export-controls';
 import { Badge } from '@/components/ui/badge';
 import { Pagination } from '@/components/ui/pagination';
 import { number } from '@/lib/utils';
@@ -122,6 +123,7 @@ export default function SignalsPage() {
           successMessage="Inactive signals cleared"
           onSuccess={fetchAll}
         />
+        <DailyExportControls resource="signals" label="Export Daily CSV" />
       </div>
 
       {/* Signals table */}

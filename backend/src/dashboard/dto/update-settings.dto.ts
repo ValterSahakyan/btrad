@@ -64,7 +64,7 @@ export class UpdateSettingsDto {
   @IsOptional()
   @IsInt()
   @Min(1)
-  @Max(20)
+  @Max(9999)
   maxConsecutiveLosses?: number;
 
   @IsOptional()
@@ -234,4 +234,96 @@ export class UpdateSettingsDto {
   @Min(0.1)
   @Max(30)
   reversionMaxSlPercent?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  trendReclaimEnabled?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0.1)
+  @Max(5)
+  trendReclaimEmaBufferAtr?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0.5)
+  @Max(5)
+  trendReclaimVolumeRatio?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0.1)
+  @Max(30)
+  trendReclaimMaxSlPercent?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0.5)
+  @Max(20)
+  trendReclaimTp1Multiplier?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0.5)
+  @Max(30)
+  trendReclaimTp2Multiplier?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  trendReclaimMinHotScore?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  rangeBounceEnabled?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(5)
+  @Max(200)
+  rangeBounceLookbackPeriod?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0.1)
+  @Max(5)
+  rangeBounceProximityAtr?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  rangeBounceRsiLongMax?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  rangeBounceRsiShortMin?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0.1)
+  @Max(30)
+  rangeBounceMaxSlPercent?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0.5)
+  @Max(20)
+  rangeBounceTp1Multiplier?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0.5)
+  @Max(30)
+  rangeBounceTp2Multiplier?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  rangeBounceMinHotScore?: number;
 }

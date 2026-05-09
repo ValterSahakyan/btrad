@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { DailyExportControls } from '@/components/actions/daily-export-controls';
 import { Badge } from '@/components/ui/badge';
 import { Pagination } from '@/components/ui/pagination';
 import { useConfirm } from '@/components/ui/confirm-modal';
@@ -9,6 +10,23 @@ import { cn, currency, number } from '@/lib/utils';
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3333/api';
 const REFRESH_MS = 10_000;
 const PAGE_SIZE = 100;
+type SortKey =
+  | 'symbol'
+  | 'direction'
+  | 'entryPrice'
+  | 'markOrExit'
+  | 'size'
+  | 'quantity'
+  | 'leverage'
+  | 'margin'
+  | 'pnl'
+  | 'pnlPercent'
+  | 'status';
+
+type SortState = {
+  key: SortKey;
+  direction: 'asc' | 'desc';
+};
 
 function dir(d: string) {
   return <span className={`font-mono text-[11px] font-semibold ${d === 'LONG' ? 'text-positive' : 'text-danger'}`}>{d}</span>;
@@ -53,6 +71,7 @@ export default function TradesPage() {
   const [closingId, setClosingId] = useState<string | null>(null);
   const [clearing, setClearing] = useState(false);
   const [page, setPage] = useState(1);
+  const [sort, setSort] = useState<SortState>({ key: 'pnl', direction: 'desc' });
   const { confirm, modal } = useConfirm();
 
   const fetchTrades = useCallback(async () => {
@@ -126,7 +145,30 @@ export default function TradesPage() {
   const liveOpen = trades.filter((t) => t.status === 'live_open').length;
   const closedCount = trades.filter((t) => t.status !== 'live_open').length;
 
-  const pageData = trades.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const sortedTrades = [...trades].sort((a, b) => compareTrades(a, b, sort));
+  const pageData = sortedTrades.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const toggleSort = (key: SortKey) => {
+    setPage(1);
+    setSort((current) =>
+      current.key === key
+        ? { key, direction: current.direction === 'asc' ? 'desc' : 'asc' }
+        : { key, direction: key === 'symbol' || key === 'direction' || key === 'status' ? 'asc' : 'desc' },
+    );
+  };
+
+  const renderHeader = (label: string, key: SortKey) => (
+    <button
+      type="button"
+      onClick={() => toggleSort(key)}
+      className="inline-flex items-center gap-1 text-left transition-colors hover:text-white"
+    >
+      <span>{label}</span>
+      <span className="font-mono text-[10px] text-dim">
+        {sort.key === key ? (sort.direction === 'asc' ? '↑' : '↓') : '↕'}
+      </span>
+    </button>
+  );
 
   return (
     <div className="space-y-3">
@@ -149,6 +191,7 @@ export default function TradesPage() {
         >
           Refresh
         </button>
+        <DailyExportControls resource="trades" label="Export Daily CSV" />
         {closedCount > 0 && (
           <button
             onClick={handleClear}
@@ -175,9 +218,18 @@ export default function TradesPage() {
               <table className="t-table">
                 <thead>
                   <tr>
-                    {['Symbol', 'Dir', 'Entry', 'Mark / Exit', 'Size', 'Qty', 'Lev', 'Margin', 'PnL', 'PnL %', 'Status', ''].map((h) => (
-                      <th key={h}>{h}</th>
-                    ))}
+                    <th>{renderHeader('Symbol', 'symbol')}</th>
+                    <th>{renderHeader('Dir', 'direction')}</th>
+                    <th>{renderHeader('Entry', 'entryPrice')}</th>
+                    <th>{renderHeader('Mark / Exit', 'markOrExit')}</th>
+                    <th>{renderHeader('Size', 'size')}</th>
+                    <th>{renderHeader('Qty', 'quantity')}</th>
+                    <th>{renderHeader('Lev', 'leverage')}</th>
+                    <th>{renderHeader('Margin', 'margin')}</th>
+                    <th>{renderHeader('PnL', 'pnl')}</th>
+                    <th>{renderHeader('PnL %', 'pnlPercent')}</th>
+                    <th>{renderHeader('Status', 'status')}</th>
+                    <th />
                   </tr>
                 </thead>
                 <tbody>
@@ -230,7 +282,7 @@ export default function TradesPage() {
             </div>
             <Pagination
               page={page}
-              total={trades.length}
+              total={sortedTrades.length}
               pageSize={PAGE_SIZE}
               onPage={setPage}
             />
@@ -239,4 +291,50 @@ export default function TradesPage() {
       </div>
     </div>
   );
+}
+
+function compareTrades(a: any, b: any, sort: SortState): number {
+  const dir = sort.direction === 'asc' ? 1 : -1;
+  const aVal = getTradeSortValue(a, sort.key);
+  const bVal = getTradeSortValue(b, sort.key);
+
+  if (typeof aVal === 'string' || typeof bVal === 'string') {
+    return String(aVal).localeCompare(String(bVal)) * dir;
+  }
+
+  return ((Number(aVal) || 0) - (Number(bVal) || 0)) * dir;
+}
+
+function getTradeSortValue(trade: any, key: SortKey): string | number {
+  const isLive = trade.status === 'live_open';
+  const markOrExit = isLive ? (trade.markPrice ?? 0) : (trade.exitPrice ?? 0);
+  const sizePrice = isLive && trade.markPrice ? trade.markPrice : trade.entryPrice;
+  const size = (trade.quantity ?? 0) * (sizePrice ?? 0);
+
+  switch (key) {
+    case 'symbol':
+      return trade.symbol ?? '';
+    case 'direction':
+      return trade.direction ?? '';
+    case 'entryPrice':
+      return trade.entryPrice ?? 0;
+    case 'markOrExit':
+      return markOrExit;
+    case 'size':
+      return size;
+    case 'quantity':
+      return trade.quantity ?? 0;
+    case 'leverage':
+      return trade.leverage ?? 0;
+    case 'margin':
+      return trade.margin ?? 0;
+    case 'pnl':
+      return trade.pnl ?? 0;
+    case 'pnlPercent':
+      return trade.pnlPercent ?? 0;
+    case 'status':
+      return trade.status ?? '';
+    default:
+      return 0;
+  }
 }

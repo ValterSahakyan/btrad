@@ -47,6 +47,22 @@ type SettingsState = {
   reversionVwapDeviationPct: number;
   reversionVolumeDeclineRatio: number;
   reversionMaxSlPercent: number;
+  trendReclaimEnabled: boolean;
+  trendReclaimEmaBufferAtr: number;
+  trendReclaimVolumeRatio: number;
+  trendReclaimMaxSlPercent: number;
+  trendReclaimTp1Multiplier: number;
+  trendReclaimTp2Multiplier: number;
+  trendReclaimMinHotScore: number;
+  rangeBounceEnabled: boolean;
+  rangeBounceLookbackPeriod: number;
+  rangeBounceProximityAtr: number;
+  rangeBounceRsiLongMax: number;
+  rangeBounceRsiShortMin: number;
+  rangeBounceMaxSlPercent: number;
+  rangeBounceTp1Multiplier: number;
+  rangeBounceTp2Multiplier: number;
+  rangeBounceMinHotScore: number;
 };
 
 type Field = { key: keyof SettingsState; label: string; unit?: string };
@@ -126,11 +142,39 @@ const SECTIONS: Section[] = [
       { key: 'reversionMaxSlPercent',         label: 'Max SL',          unit: '%' },
     ],
   },
+  {
+    title: 'Strategy: Trend Reclaim',
+    description: 'Joins strong trends after a clean EMA reclaim with confirming volume.',
+    fields: [
+      { key: 'trendReclaimEnabled',        label: 'Enabled' },
+      { key: 'trendReclaimEmaBufferAtr',   label: 'EMA Buffer',        unit: 'x ATR' },
+      { key: 'trendReclaimVolumeRatio',    label: 'Min Vol. Ratio',    unit: 'x avg' },
+      { key: 'trendReclaimMaxSlPercent',   label: 'Max SL',            unit: '%' },
+      { key: 'trendReclaimTp1Multiplier',  label: 'TP1 Mult.',         unit: 'x risk' },
+      { key: 'trendReclaimTp2Multiplier',  label: 'TP2 Mult.',         unit: 'x risk' },
+      { key: 'trendReclaimMinHotScore',    label: 'Min Hot Score' },
+    ],
+  },
+  {
+    title: 'Strategy: Range Bounce',
+    description: 'Trades rejection bounces from 1h support and resistance in calmer conditions.',
+    fields: [
+      { key: 'rangeBounceEnabled',         label: 'Enabled' },
+      { key: 'rangeBounceLookbackPeriod',  label: 'Lookback',          unit: '1h candles' },
+      { key: 'rangeBounceProximityAtr',    label: 'Level Proximity',   unit: 'x ATR' },
+      { key: 'rangeBounceRsiLongMax',      label: 'RSI Long Max' },
+      { key: 'rangeBounceRsiShortMin',     label: 'RSI Short Min' },
+      { key: 'rangeBounceMaxSlPercent',    label: 'Max SL',            unit: '%' },
+      { key: 'rangeBounceTp1Multiplier',   label: 'TP1 Mult.',         unit: 'x risk' },
+      { key: 'rangeBounceTp2Multiplier',   label: 'TP2 Mult.',         unit: 'x risk' },
+      { key: 'rangeBounceMinHotScore',     label: 'Min Hot Score' },
+    ],
+  },
 ];
 
 const BOOLEAN_KEYS = new Set([
   'isPaused', 'enableRealTrading', 'allowAutoLiveExecution',
-  'breakoutEnabled', 'pullbackEnabled', 'reversionEnabled',
+  'breakoutEnabled', 'pullbackEnabled', 'reversionEnabled', 'trendReclaimEnabled', 'rangeBounceEnabled',
 ]);
 
 const inputCls =
@@ -183,6 +227,22 @@ export function SettingsForm({ settings }: { settings: any }) {
     reversionVwapDeviationPct: settings.reversionVwapDeviationPct ?? 3,
     reversionVolumeDeclineRatio: settings.reversionVolumeDeclineRatio ?? 0.6,
     reversionMaxSlPercent: settings.reversionMaxSlPercent ?? 5,
+    trendReclaimEnabled: settings.trendReclaimEnabled ?? true,
+    trendReclaimEmaBufferAtr: settings.trendReclaimEmaBufferAtr ?? 0.35,
+    trendReclaimVolumeRatio: settings.trendReclaimVolumeRatio ?? 1.1,
+    trendReclaimMaxSlPercent: settings.trendReclaimMaxSlPercent ?? 3.5,
+    trendReclaimTp1Multiplier: settings.trendReclaimTp1Multiplier ?? 1.4,
+    trendReclaimTp2Multiplier: settings.trendReclaimTp2Multiplier ?? 2.3,
+    trendReclaimMinHotScore: settings.trendReclaimMinHotScore ?? 50,
+    rangeBounceEnabled: settings.rangeBounceEnabled ?? true,
+    rangeBounceLookbackPeriod: settings.rangeBounceLookbackPeriod ?? 24,
+    rangeBounceProximityAtr: settings.rangeBounceProximityAtr ?? 0.8,
+    rangeBounceRsiLongMax: settings.rangeBounceRsiLongMax ?? 45,
+    rangeBounceRsiShortMin: settings.rangeBounceRsiShortMin ?? 55,
+    rangeBounceMaxSlPercent: settings.rangeBounceMaxSlPercent ?? 3.2,
+    rangeBounceTp1Multiplier: settings.rangeBounceTp1Multiplier ?? 1.3,
+    rangeBounceTp2Multiplier: settings.rangeBounceTp2Multiplier ?? 2,
+    rangeBounceMinHotScore: settings.rangeBounceMinHotScore ?? 35,
   });
 
   const [isPending, setPending] = useState(false);

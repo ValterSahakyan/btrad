@@ -1,5 +1,4 @@
 {
   "/icon.svg/route": "app/icon.svg/route.js",
-  "/settings/page": "app/settings/page.js",
   "/trades/page": "app/trades/page.js"
 }

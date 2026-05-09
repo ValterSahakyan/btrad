@@ -13,6 +13,8 @@ type LiveTradeWithOrders = Prisma.TradeGetPayload<{
 
 @Injectable()
 export class PositionMonitorService implements OnModuleInit {
+  private running = false;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly binanceService: BinanceService,
@@ -27,10 +29,17 @@ export class PositionMonitorService implements OnModuleInit {
   }
 
   async run(): Promise<void> {
-    await this.monitorLiveTrades();
-    await this.expireStaleSignals();
-    await this.refillOpenSlots();
-    await this.ensureContinuousLiveFlow();
+    if (this.running) return;
+    this.running = true;
+
+    try {
+      await this.monitorLiveTrades();
+      await this.expireStaleSignals();
+      await this.refillOpenSlots();
+      await this.ensureContinuousLiveFlow();
+    } finally {
+      this.running = false;
+    }
   }
 
   private async reconcileStartupState(): Promise<void> {

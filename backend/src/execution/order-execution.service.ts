@@ -56,16 +56,19 @@ export class OrderExecutionService {
       throw new BadRequestException('Bot must be in live mode to place live orders');
     }
 
-    // Re-check limits at execution time (may have changed since signal was created)
-    const openTrades = await this.prisma.trade.count({ where: { status: 'live_open' } });
+    // Re-check limits at execution time (may have changed since signal was created).
+    // These reads are independent, so run them together to reduce entry latency.
+    const [openTrades, existingTrade] = await Promise.all([
+      this.prisma.trade.count({ where: { status: 'live_open' } }),
+      this.prisma.trade.findFirst({
+        where: { symbol: signal.symbol.symbol, status: 'live_open' },
+      }),
+    ]);
     if (openTrades >= (settings.maxOpenTrades ?? 2)) {
       await revertToActive();
       throw new BadRequestException(`Max open trades limit reached (${settings.maxOpenTrades})`);
     }
 
-    const existingTrade = await this.prisma.trade.findFirst({
-      where: { symbol: signal.symbol.symbol, status: 'live_open' },
-    });
     if (existingTrade) {
       await revertToActive();
       throw new BadRequestException(`A live trade for ${signal.symbol.symbol} is already open`);
