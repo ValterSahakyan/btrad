@@ -21,11 +21,11 @@ ENV NODE_ENV=production
 
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
-COPY package.json package-lock.json ./
-COPY backend/package.json backend/package.json
-COPY frontend/package.json frontend/package.json
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/backend ./backend
+COPY --chown=appuser:appgroup package.json package-lock.json ./
+COPY --chown=appuser:appgroup backend/package.json backend/package.json
+COPY --chown=appuser:appgroup frontend/package.json frontend/package.json
+COPY --from=builder --chown=appuser:appgroup /app/node_modules ./node_modules
+COPY --from=builder --chown=appuser:appgroup /app/backend ./backend
 
 EXPOSE 3000
 
