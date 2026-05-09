@@ -1,0 +1,14 @@
+{
+  "/api/auth/clear/route": "app/api/auth/clear/route.js",
+  "/icon.svg/route": "app/icon.svg/route.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/overview/page": "app/overview/page.js",
+  "/login/page": "app/login/page.js",
+  "/page": "app/page.js",
+  "/logs/page": "app/logs/page.js",
+  "/performance/page": "app/performance/page.js",
+  "/hot-coins/page": "app/hot-coins/page.js",
+  "/settings/page": "app/settings/page.js",
+  "/signals/page": "app/signals/page.js",
+  "/trades/page": "app/trades/page.js"
+}

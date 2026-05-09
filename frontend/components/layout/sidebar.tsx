@@ -17,21 +17,25 @@ import {
 import { cn } from '@/lib/utils';
 
 const navItems: Array<{ href: Route; label: string; icon: ComponentType<{ size?: number; strokeWidth?: number }> }> = [
-  { href: '/overview',     label: 'Overview',     icon: Activity },
-  { href: '/hot-coins',    label: 'Scanner',      icon: Flame },
-  { href: '/signals',      label: 'Signals',      icon: Radio },
-  { href: '/trades',       label: 'Trades',       icon: TrendingUp },
-  { href: '/performance',  label: 'Performance',  icon: BarChart2 },
-  { href: '/settings',     label: 'Settings',     icon: Settings },
-  { href: '/logs',         label: 'Logs',         icon: List },
+  { href: '/overview', label: 'Overview', icon: Activity },
+  { href: '/hot-coins', label: 'Scanner', icon: Flame },
+  { href: '/signals', label: 'Signals', icon: Radio },
+  { href: '/trades', label: 'Trades', icon: TrendingUp },
+  { href: '/performance', label: 'Performance', icon: BarChart2 },
+  { href: '/settings', label: 'Settings', icon: Settings },
+  { href: '/logs', label: 'Logs', icon: List },
 ];
+
+const productMeta = {
+  exchange: 'Binance USD-M Futures',
+  app: 'PerpScout AI v1.0',
+};
 
 export function Sidebar() {
   const pathname = usePathname();
 
   return (
     <aside className="app-sidebar">
-      {/* Brand */}
       <div className="px-4 py-5 border-b border-border">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded bg-accent/15 flex items-center justify-center">
@@ -44,12 +48,12 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* Nav */}
       <nav className="flex-1 py-3">
         <div className="px-3 mb-1.5 text-[10px] uppercase tracking-widest text-dim font-medium">Navigation</div>
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href || (item.href !== '/overview' && pathname.startsWith(item.href));
+
           return (
             <Link
               key={item.href}
@@ -63,10 +67,9 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Footer */}
-      <div className="p-4 border-t border-border">
-        <div className="text-[10px] text-dim">Binance USDⓈ-M Futures</div>
-        <div className="text-[10px] text-dim opacity-50 mt-0.5">PerpScout AI v1.0</div>
+      <div className="mt-auto p-4 border-t border-border">
+        <div className="text-[10px] text-dim tracking-wide">{productMeta.exchange}</div>
+        <div className="mt-0.5 text-[10px] text-dim opacity-50 tracking-wide">{productMeta.app}</div>
       </div>
     </aside>
   );
