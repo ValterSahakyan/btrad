@@ -63,6 +63,9 @@ type SettingsState = {
   rangeBounceTp1Multiplier: number;
   rangeBounceTp2Multiplier: number;
   rangeBounceMinHotScore: number;
+  fixedRoeEnabled: boolean;
+  fixedRoeTpPercent: number;
+  fixedRoeSlPercent: number;
 };
 
 type Field = { key: keyof SettingsState; label: string; unit?: string; min?: number; max?: number };
@@ -100,6 +103,15 @@ const SECTIONS: Section[] = [
       { key: 'minHotScoreForScan',      label: 'Min Hot Score' },
       { key: 'minConfidenceScore',      label: 'Min Confidence' },
       { key: 'minRiskReward',           label: 'Min R/R' },
+    ],
+  },
+  {
+    title: 'Fixed ROE Targets (Fee-Adjusted)',
+    description: 'If enabled, SL/TP are calculated to guarantee specific net ROE% after Binance fees.',
+    fields: [
+      { key: 'fixedRoeEnabled',         label: 'Enabled' },
+      { key: 'fixedRoeTpPercent',       label: 'Target Profit ROE', unit: '%' },
+      { key: 'fixedRoeSlPercent',       label: 'Stop Loss ROE',     unit: '%' },
     ],
   },
   {
@@ -174,6 +186,7 @@ const SECTIONS: Section[] = [
 const BOOLEAN_KEYS = new Set([
   'enableRealTrading', 'allowAutoLiveExecution',
   'breakoutEnabled', 'pullbackEnabled', 'reversionEnabled', 'trendReclaimEnabled', 'rangeBounceEnabled',
+  'fixedRoeEnabled',
 ]);
 
 const inputCls =
@@ -241,6 +254,9 @@ export function SettingsForm({ settings }: { settings: any }) {
     rangeBounceTp1Multiplier: settings.rangeBounceTp1Multiplier ?? 1.3,
     rangeBounceTp2Multiplier: settings.rangeBounceTp2Multiplier ?? 2,
     rangeBounceMinHotScore: settings.rangeBounceMinHotScore ?? 35,
+    fixedRoeEnabled: settings.fixedRoeEnabled ?? false,
+    fixedRoeTpPercent: settings.fixedRoeTpPercent ?? 20,
+    fixedRoeSlPercent: settings.fixedRoeSlPercent ?? 20,
   });
 
   const [isPending, setPending] = useState(false);

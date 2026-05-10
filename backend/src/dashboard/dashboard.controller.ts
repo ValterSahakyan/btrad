@@ -682,6 +682,13 @@ function validateSettingsConsistency(body: UpdateSettingsDto): void {
     throw new BadRequestException('Pullback short RSI min must be less than or equal to max');
   }
 
+  if (body.fixedRoeTpPercent !== undefined && body.fixedRoeTpPercent <= 0) {
+    throw new BadRequestException('Fixed ROE Target Profit must be greater than 0');
+  }
+
+  if (body.fixedRoeSlPercent !== undefined && body.fixedRoeSlPercent <= 0) {
+    throw new BadRequestException('Fixed ROE Stop Loss must be greater than 0');
+  }
 }
 
 function getActor(request: Request): string {

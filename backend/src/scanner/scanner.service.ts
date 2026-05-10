@@ -293,15 +293,58 @@ export class ScannerService {
           continue;
         }
 
+        let stopLoss = candidate.stopLoss;
+        let takeProfit1 = candidate.takeProfit1;
+        let takeProfit2 = candidate.takeProfit2;
+
+        if (settings?.fixedRoeEnabled) {
+          const feeBps = Number(process.env.ESTIMATED_TAKER_FEE_BPS ?? 4);
+          const feeRate = feeBps / 10000;
+          const leverage = risk.leverage;
+
+          takeProfit1 = this.calculateFixedRoePrice({
+            entryPrice: candidate.entryPrice,
+            direction: candidate.direction,
+            leverage,
+            targetRoePercent: settings.fixedRoeTpPercent ?? 20,
+            feeRate,
+            isTp: true,
+          });
+
+          // Use slightly higher target for TP2 if fixed ROE is on
+          takeProfit2 = this.calculateFixedRoePrice({
+            entryPrice: candidate.entryPrice,
+            direction: candidate.direction,
+            leverage,
+            targetRoePercent: (settings.fixedRoeTpPercent ?? 20) * 1.5,
+            feeRate,
+            isTp: true,
+          });
+
+          stopLoss = this.calculateFixedRoePrice({
+            entryPrice: candidate.entryPrice,
+            direction: candidate.direction,
+            leverage,
+            targetRoePercent: settings.fixedRoeSlPercent ?? 20,
+            feeRate,
+            isTp: false,
+          });
+
+          // Round to symbol precision
+          takeProfit1 = Number(takeProfit1.toFixed(symbolRecord.pricePrecision));
+          takeProfit2 = Number(takeProfit2.toFixed(symbolRecord.pricePrecision));
+          stopLoss = Number(stopLoss.toFixed(symbolRecord.pricePrecision));
+        }
+
         const signal = await this.prisma.signal.create({
           data: {
             symbolId: symbolRecord.id,
             direction: candidate.direction,
             strategy: candidate.strategy,
             entryPrice: candidate.entryPrice,
-            stopLoss: candidate.stopLoss,
-            takeProfit1: candidate.takeProfit1,
-            takeProfit2: candidate.takeProfit2,
+            stopLoss,
+            takeProfit1,
+            takeProfit2,
             leverage: risk.leverage,
             riskAmount: risk.riskAmount,
             positionSize: risk.positionSize,
@@ -558,4 +601,34 @@ function buildStrategyConfig(settings: Record<string, unknown> | null): Strategy
       minHotScore: s?.rangeBounceMinHotScore ?? 35,
     },
   };
+  }
+
+  private calculateFixedRoePrice(params: {
+    entryPrice: number;
+    direction: 'LONG' | 'SHORT';
+    leverage: number;
+    targetRoePercent: number;
+    feeRate: number;
+    isTp: boolean;
+  }): number {
+    const { entryPrice, direction, leverage, targetRoePercent, feeRate, isTp } = params;
+    const R = targetRoePercent / 100;
+    const L = leverage;
+    const F = feeRate;
+    const E = entryPrice;
+
+    if (direction === 'LONG') {
+      if (isTp) {
+        return (E * (R / L + 1 + F)) / (1 - F);
+      } else {
+        return (E * (1 + F - R / L)) / (1 - F);
+      }
+    } else {
+      if (isTp) {
+        return (E * (1 - F - R / L)) / (1 + F);
+      } else {
+        return (E * (R / L + 1 - F)) / (1 + F);
+      }
+    }
+  }
 }

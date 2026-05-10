@@ -58,6 +58,10 @@ model BotSettings {
   signalExpirationMinutes      Int      @default(15)
   maxSymbolsPerScan            Int      @default(50)
   minHotScoreForScan           Float    @default(45)
+
+  fixedRoeEnabled              Boolean  @default(false)
+  fixedRoeTpPercent            Float    @default(20)
+  fixedRoeSlPercent            Float    @default(20)
   minPositionUsd               Float    @default(5)
   maxPositionUsd               Float    @default(20)
   weekendModeEnabled           Boolean  @default(false)

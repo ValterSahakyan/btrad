@@ -100,6 +100,22 @@ export class UpdateSettingsDto {
   minHotScoreForScan?: number;
 
   @IsOptional()
+  @IsBoolean()
+  fixedRoeEnabled?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0.1)
+  @Max(1000)
+  fixedRoeTpPercent?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0.1)
+  @Max(1000)
+  fixedRoeSlPercent?: number;
+
+  @IsOptional()
   @IsNumber()
   @Min(1)
   @Max(1_000_000)
