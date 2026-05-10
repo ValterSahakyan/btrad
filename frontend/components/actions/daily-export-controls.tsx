@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Button } from '../ui/button';
 import { ToastContainer } from '../ui/toast';
 import { useToast } from '@/hooks/use-toast';
+import { clientApiPath } from '@/lib/client-api';
 
 function todayLocalDate(): string {
   const now = new Date();
@@ -25,8 +26,7 @@ export function DailyExportControls({
   const onDownload = async () => {
     setPending(true);
     try {
-      const base = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3333/api';
-      const response = await fetch(`${base}/${resource}/export/daily?date=${encodeURIComponent(date)}`, {
+      const response = await fetch(`${clientApiPath(`/${resource}/export/daily`)}?date=${encodeURIComponent(date)}`, {
         credentials: 'include',
       });
       if (!response.ok) {

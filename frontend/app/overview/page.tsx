@@ -58,15 +58,23 @@ export default async function OverviewPage() {
   ]);
 
   const totalPnl = perf.totalPnl ?? 0;
+  const isStopped = status.botStatus === 'paused';
 
   return (
     <div className="space-y-4">
+      {isStopped && (
+        <div className="flex items-center gap-2 rounded border border-danger/20 bg-danger/5 px-4 py-2.5 text-[12px] text-danger">
+          <span className="font-mono">!</span>
+          Bot is stopped. Existing live trades are still monitored, but no new scans or trades will start.
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <MetricCard
           label="Bot Status"
-          value="Running"
+          value={isStopped ? 'Stopped' : 'Running'}
           hint={`${status.mode} · ${execMode(status.executionMode)}`}
-          tone="positive"
+          tone={isStopped ? 'danger' : 'positive'}
           mono={false}
         />
         <MetricCard

@@ -277,6 +277,7 @@ export class PositionMonitorService implements OnModuleInit {
   private async refillOpenSlots(): Promise<void> {
     const settings = applyWeekendOverrides(await this.prisma.botSettings.findFirst());
     if (!settings) return;
+    if (settings.isPaused) return;
     if (settings.mode !== 'live') return;
     if (!settings.realTradingEnabled) return;
     if (settings.requireDashboardConfirmation !== false) return;
@@ -339,6 +340,7 @@ export class PositionMonitorService implements OnModuleInit {
   private async ensureContinuousLiveFlow(): Promise<void> {
     const settings = applyWeekendOverrides(await this.prisma.botSettings.findFirst());
     if (!settings) return;
+    if (settings.isPaused) return;
     if (settings.mode !== 'live') return;
     if (!settings.realTradingEnabled) return;
     if (settings.requireDashboardConfirmation !== false) return;

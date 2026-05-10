@@ -73,7 +73,7 @@ export class DashboardController {
         : 'live_manual'
       : 'signal_only';
     return {
-      botStatus: 'running',
+      botStatus: settings?.isPaused ? 'paused' : 'running',
       mode: settings?.mode ?? 'testnet',
       realTradingEnabled: settings?.realTradingEnabled ?? false,
       enableRealTrading: settings?.realTradingEnabled ?? false,
@@ -229,30 +229,33 @@ export class DashboardController {
   @Post('/bot/pause')
   async pauseBot(@Req() request: Request) {
     const settings = await this.getSettings();
-    await this.logsService.audit('bot.pause_ignored', getActor(request), {});
+    const updated = await this.prisma.botSettings.update({ where: { id: settings.id }, data: { isPaused: true } });
+    await this.logsService.audit('bot.paused', getActor(request), {});
     return {
-      ...settings,
-      message: 'Pause state has been removed. Use mode and real-trading settings to control execution.',
+      ...serializeSettings(updated),
+      message: 'Bot paused. No new scans or trades will be started.',
     };
   }
 
   @Post('/bot/stop')
   async stopBot(@Req() request: Request) {
     const settings = await this.getSettings();
-    await this.logsService.audit('bot.stop_ignored', getActor(request), {});
+    const updated = await this.prisma.botSettings.update({ where: { id: settings.id }, data: { isPaused: true } });
+    await this.logsService.audit('bot.stopped', getActor(request), {});
     return {
-      ...settings,
-      message: 'Stop no longer uses a pause flag. Change live trading settings instead.',
+      ...serializeSettings(updated),
+      message: 'Bot stopped. Existing live trades will still be monitored.',
     };
   }
 
   @Post('/bot/resume')
   async resumeBot(@Req() request: Request) {
     const settings = await this.getSettings();
-    await this.logsService.audit('bot.resume_ignored', getActor(request), {});
+    const updated = await this.prisma.botSettings.update({ where: { id: settings.id }, data: { isPaused: false } });
+    await this.logsService.audit('bot.resumed', getActor(request), {});
     return {
-      ...settings,
-      message: 'Resume no longer changes a pause flag.',
+      ...serializeSettings(updated),
+      message: 'Bot resumed.',
     };
   }
 
@@ -260,6 +263,7 @@ export class DashboardController {
   async startBot(@Req() request: Request) {
     const actor = getActor(request);
     const settings = await this.getSettings();
+    await this.prisma.botSettings.update({ where: { id: settings.id }, data: { isPaused: false } });
 
     const sync = await this.scannerService.syncSymbols();
     const scan = await this.scannerService.runScan();
@@ -282,21 +286,24 @@ export class DashboardController {
   async emergencyStop(@Req() request: Request) {
     const actor = getActor(request);
     const settings = await this.getSettings();
-    await this.prisma.signal.updateMany({
-      where: { status: { in: ['active', 'pending', 'approved'] } },
-      data: { status: 'cancelled' },
-    });
+    const [updated] = await Promise.all([
+      this.prisma.botSettings.update({ where: { id: settings.id }, data: { isPaused: true } }),
+      this.prisma.signal.updateMany({
+        where: { status: { in: ['active', 'pending', 'approved'] } },
+        data: { status: 'cancelled' },
+      }),
+    ]);
 
     await this.logsService.audit('bot.emergency_stop', actor, {});
     await this.logsService.risk('emergency_stop', 'Emergency stop activated; pending signals cancelled', 'critical', {
       actor,
     });
     await this.telegramService.sendMessage(
-      `<b>EMERGENCY STOP</b>\nActor: ${actor}\nPending signals cancelled.`,
+      `<b>EMERGENCY STOP</b>\nActor: ${actor}\nBot stopped and pending signals cancelled.`,
     );
     return {
-      ...settings,
-      message: 'Emergency stop cancelled pending signals. The pause flag is no longer used.',
+      ...serializeSettings(updated),
+      message: 'Emergency stop activated. Bot stopped and pending signals cancelled.',
     };
   }
 

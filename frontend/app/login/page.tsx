@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { clientApiPath } from '@/lib/client-api';
 
 declare global {
   interface Window {
@@ -20,7 +21,6 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const router = useRouter();
 
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3333/api';
   const busy = step !== 'idle';
 
   async function handleConnect() {
@@ -36,7 +36,7 @@ export default function LoginPage() {
       if (!account) { setError('No account selected.'); setStep('idle'); return; }
       setAddress(account);
 
-      const nonceRes = await fetch(`${apiBase}/auth/nonce?address=${account}`);
+      const nonceRes = await fetch(`${clientApiPath('/auth/nonce')}?address=${account}`);
       if (!nonceRes.ok) { setError('Could not reach backend.'); setStep('idle'); return; }
       const { message, error: nonceErr } = (await nonceRes.json()) as { message?: string; error?: string };
       if (nonceErr || !message) { setError(nonceErr ?? 'Failed to get challenge.'); setStep('idle'); return; }
@@ -52,7 +52,7 @@ export default function LoginPage() {
       }
 
       setStep('verifying');
-      const loginRes = await fetch(`${apiBase}/auth/login`, {
+      const loginRes = await fetch(clientApiPath('/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ address: account, signature }),

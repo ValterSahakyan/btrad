@@ -42,7 +42,8 @@ declare namespace __next_route_internal_types__ {
     | `/settings`
     | `/signals`
     | `/trades`
-  type DynamicRoutes<T extends string = string> = never
+  type DynamicRoutes<T extends string = string> = 
+    | `/api/backend/${CatchAllSlug<T>}`
 
   type RouteImpl<T> = 
     | StaticRoutes

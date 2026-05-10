@@ -6,6 +6,7 @@ import { Button } from '../ui/button';
 import { ToastContainer } from '../ui/toast';
 import { useToast } from '@/hooks/use-toast';
 import { useConfirm } from '../ui/confirm-modal';
+import { clientApiPath } from '@/lib/client-api';
 
 export function ActionButton({
   label,
@@ -52,15 +53,12 @@ export function ActionButton({
 
     setPending(true);
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3333/api'}${path}`,
-        {
-          method,
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: body ? JSON.stringify(body) : undefined,
-        },
-      );
+      const res = await fetch(clientApiPath(path), {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: body ? JSON.stringify(body) : undefined,
+      });
       if (!res.ok) {
         const data = await res.json().catch(() => ({})) as { message?: string };
         toast.error(data.message ?? `Request failed (${res.status})`);

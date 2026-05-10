@@ -5,9 +5,10 @@ import { DailyExportControls } from '@/components/actions/daily-export-controls'
 import { Badge } from '@/components/ui/badge';
 import { Pagination } from '@/components/ui/pagination';
 import { useConfirm } from '@/components/ui/confirm-modal';
+import { clientApiPath } from '@/lib/client-api';
 import { cn, currency, number } from '@/lib/utils';
 
-const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3333/api';
+const API = '/api/backend';
 const REFRESH_MS = 10_000;
 const PAGE_SIZE = 100;
 type SortKey =
@@ -76,7 +77,7 @@ export default function TradesPage() {
 
   const fetchTrades = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/trades`, { credentials: 'include', cache: 'no-store' });
+      const res = await fetch(clientApiPath('/trades'), { credentials: 'include', cache: 'no-store' });
       if (!res.ok) {
         setBackendError(`Backend request failed (${res.status})`);
         return;
@@ -113,7 +114,7 @@ export default function TradesPage() {
     if (!ok) return;
     setClosingId(tradeId);
     try {
-      await fetch(`${API}/trades/${tradeId}/close-live`, {
+      await fetch(clientApiPath(`/trades/${tradeId}/close-live`), {
         method: 'POST', credentials: 'include',
       });
       await fetchTrades();
@@ -134,7 +135,7 @@ export default function TradesPage() {
     if (!ok) return;
     setClearing(true);
     try {
-      await fetch(`${API}/trades/cleanup`, { method: 'POST', credentials: 'include' });
+      await fetch(clientApiPath('/trades/cleanup'), { method: 'POST', credentials: 'include' });
       setPage(1);
       await fetchTrades();
     } finally {

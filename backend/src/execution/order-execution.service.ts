@@ -48,6 +48,10 @@ export class OrderExecutionService {
     }
 
     const settings = applyWeekendOverrides(await this.prisma.botSettings.findFirst());
+    if (settings?.isPaused) {
+      await revertToActive();
+      throw new BadRequestException('Bot is stopped');
+    }
     if (!settings?.realTradingEnabled) {
       await revertToActive();
       throw new BadRequestException('Real trading is not enabled in settings');

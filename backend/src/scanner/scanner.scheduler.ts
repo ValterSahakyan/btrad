@@ -18,6 +18,7 @@ export class ScannerScheduler {
   async handleCron(): Promise<void> {
     try {
       const settings = await this.prisma.botSettings.findFirst();
+      if (settings?.isPaused) return;
       const intervalMs = (settings?.scannerIntervalSeconds ?? 60) * 1000;
       if (Date.now() - this.lastRunAt < intervalMs) return;
 

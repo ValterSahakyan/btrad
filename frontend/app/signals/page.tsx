@@ -6,8 +6,9 @@ import { DailyExportControls } from '@/components/actions/daily-export-controls'
 import { Badge } from '@/components/ui/badge';
 import { Pagination } from '@/components/ui/pagination';
 import { number } from '@/lib/utils';
+import { clientApiPath } from '@/lib/client-api';
 
-const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3333/api';
+const API = '/api/backend';
 const REFRESH_MS = 15_000;
 const PAGE_SIZE = 100;
 
@@ -55,8 +56,8 @@ export default function SignalsPage() {
   const fetchAll = useCallback(async () => {
     try {
       const [sigRes, stRes] = await Promise.all([
-        fetch(`${API}/signals`, { credentials: 'include', cache: 'no-store' }),
-        fetch(`${API}/status`, { credentials: 'include', cache: 'no-store' }),
+        fetch(clientApiPath('/signals'), { credentials: 'include', cache: 'no-store' }),
+        fetch(clientApiPath('/status'), { credentials: 'include', cache: 'no-store' }),
       ]);
       if (!sigRes.ok || !stRes.ok) {
         setBackendError(`Backend request failed (${!sigRes.ok ? sigRes.status : stRes.status})`);

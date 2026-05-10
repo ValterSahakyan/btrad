@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '../ui/button';
 import { ToastContainer } from '../ui/toast';
 import { useToast } from '@/hooks/use-toast';
+import { clientApiPath } from '@/lib/client-api';
 
 type SettingsState = {
   mode: 'testnet' | 'live';
@@ -302,7 +303,7 @@ export function SettingsForm({ settings }: { settings: any }) {
 
             setPending(true);
             try {
-              const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3333/api'}/settings`, {
+              const res = await fetch(clientApiPath('/settings'), {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(form),

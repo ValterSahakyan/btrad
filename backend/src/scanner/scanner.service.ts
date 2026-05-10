@@ -77,6 +77,9 @@ export class ScannerService {
   private async _runScan(): Promise<{ processed: number; signalsCreated: number }> {
     const baseSettings = await this.prisma.botSettings.findFirst();
     const settings = applyWeekendOverrides(baseSettings);
+    if (baseSettings?.isPaused) {
+      return { processed: 0, signalsCreated: 0 };
+    }
     await this.logsService.info('scanner', 'Starting market scan');
     const regime = await this.marketRegimeService.getRegime();
     await this.logsService.info('scanner', `Market regime: ${regime.regime}`, {

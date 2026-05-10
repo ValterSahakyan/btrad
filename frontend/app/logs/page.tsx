@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Pagination } from '@/components/ui/pagination';
+import { clientApiPath } from '@/lib/client-api';
 
-const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3333/api';
+const API = '/api/backend';
 const REFRESH_MS = 15_000;
 const PAGE_SIZE = 100;
 
@@ -38,8 +39,8 @@ export default function LogsPage() {
   const fetchAll = useCallback(async () => {
     try {
       const [logsRes, eventsRes] = await Promise.all([
-        fetch(`${API}/logs`, { credentials: 'include', cache: 'no-store' }),
-        fetch(`${API}/risk-events`, { credentials: 'include', cache: 'no-store' }),
+        fetch(clientApiPath('/logs'), { credentials: 'include', cache: 'no-store' }),
+        fetch(clientApiPath('/risk-events'), { credentials: 'include', cache: 'no-store' }),
       ]);
       if (logsRes.ok) setLogs(await logsRes.json());
       if (eventsRes.ok) setEvents(await eventsRes.json());

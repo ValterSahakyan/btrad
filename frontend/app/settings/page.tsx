@@ -25,6 +25,7 @@ export default async function SettingsPage() {
   }
 
   const isLive = settings.mode === 'live';
+  const isStopped = settings.isPaused === true;
   const realOn = settings.enableRealTrading ?? settings.realTradingEnabled;
   const autoExec = settings.allowAutoLiveExecution ?? (settings.requireDashboardConfirmation === false);
 
@@ -48,7 +49,9 @@ export default async function SettingsPage() {
               <Badge tone={isLive ? 'positive' : 'warning'}>{settings.mode}</Badge>
             </Row>
             <Row label="Status">
-              <Badge tone="positive">Running</Badge>
+              <Badge tone={isStopped ? 'danger' : 'positive'}>
+                {isStopped ? 'Stopped' : 'Running'}
+              </Badge>
             </Row>
             <Row label="Real Trading">
               <Badge tone={realOn ? 'positive' : 'danger'}>{realOn ? 'ON' : 'OFF'}</Badge>
@@ -112,7 +115,7 @@ export default async function SettingsPage() {
           <div className="panel p-4">
             <div className="mb-3 text-[11px] font-medium uppercase tracking-widest text-dim">Controls</div>
             <p className="mb-3 text-[11px] leading-relaxed text-dim">
-              Start syncs symbols and runs one scanner cycle immediately.
+              Start resumes scanning and runs one scanner cycle immediately. Stop blocks new scans and new trades.
             </p>
             <div className="flex gap-2">
               <ActionButton
@@ -121,7 +124,16 @@ export default async function SettingsPage() {
                 variant="default"
                 size="sm"
                 confirmTitle="Start Bot"
-                confirmMessage="Sync symbols from Binance and run one scanner cycle immediately?"
+                confirmMessage="Resume the bot, sync symbols from Binance, and run one scanner cycle immediately?"
+              />
+              <ActionButton
+                label="Stop Bot"
+                path="/bot/stop"
+                variant="danger"
+                size="sm"
+                confirmTitle="Stop Bot"
+                confirmMessage="Stop the bot? Existing live trades will still be monitored, but no new scans or trades will start."
+                confirmVariant="danger"
               />
             </div>
           </div>

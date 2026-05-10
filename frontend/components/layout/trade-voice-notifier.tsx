@@ -3,8 +3,9 @@
 import { useEffect, useRef } from 'react';
 import { ToastContainer } from '@/components/ui/toast';
 import { useToast } from '@/hooks/use-toast';
+import { clientApiPath } from '@/lib/client-api';
 
-const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3333/api';
+const API = '/api/backend';
 const REFRESH_MS = 10_000;
 // Only announce a trade that has been open for at least this many ms (avoids
 // announcing positions that immediately fail due to SL rejection)
@@ -61,7 +62,7 @@ export function TradeVoiceNotifier() {
 
     const checkTrades = async () => {
       try {
-        const response = await fetch(`${API}/trades`, {
+        const response = await fetch(clientApiPath('/trades'), {
           credentials: 'include',
           cache: 'no-store',
         });
