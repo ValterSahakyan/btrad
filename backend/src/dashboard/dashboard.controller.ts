@@ -66,7 +66,17 @@ export class DashboardController {
   async getStatus() {
     const settings = await this.prisma.botSettings.findFirst();
     const activeSignals = await this.prisma.signal.count({ where: { status: 'active' } });
-    const openTrades = await this.prisma.trade.count({ where: { status: 'live_open' } });
+    const dbOpenTrades = await this.prisma.trade.count({ where: { status: 'live_open' } });
+    let exchangeOpenTrades = dbOpenTrades;
+    if (settings?.mode === 'live' && this.binanceService.hasApiKeys()) {
+      try {
+        const positions = await this.binanceService.fetchOpenPositions();
+        exchangeOpenTrades = positions.length;
+      } catch {
+        exchangeOpenTrades = dbOpenTrades;
+      }
+    }
+    const openTrades = Math.max(dbOpenTrades, exchangeOpenTrades);
     const executionMode = settings?.realTradingEnabled && settings?.mode === 'live'
       ? settings.requireDashboardConfirmation === false
         ? 'live_auto'
@@ -82,6 +92,8 @@ export class DashboardController {
       executionMode,
       activeSignals,
       openTrades,
+      dbOpenTrades,
+      exchangeOpenTrades,
       lastScannerRun: (await this.prisma.botLog.findFirst({
         where: { source: 'scanner', message: 'Completed market scan' },
         orderBy: { createdAt: 'desc' },

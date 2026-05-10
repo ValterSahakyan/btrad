@@ -19,15 +19,12 @@ export class TradesService {
       take: 200,
     });
 
-    const openTrades = trades.filter((t) => t.status === 'live_open');
-    if (openTrades.length === 0) return trades;
-
-    // Overlay live unrealized PnL from Binance for open positions
     try {
       const positions = await this.binanceService.fetchOpenPositions();
       const posMap = new Map(positions.map((p) => [p.symbol, p]));
+      const openTrades = trades.filter((t) => t.status === 'live_open');
 
-      return trades.map((trade) => {
+      const hydratedTrades = trades.map((trade) => {
         if (trade.status !== 'live_open') return trade;
         const pos = posMap.get(trade.symbol);
         if (!pos) return trade;
@@ -40,6 +37,40 @@ export class TradesService {
           markPrice: Number(pos.markPrice),
         };
       });
+
+      const dbOpenSymbols = new Set(openTrades.map((trade) => trade.symbol));
+      const orphanTrades = positions
+        .filter((position) => !dbOpenSymbols.has(position.symbol))
+        .map((position) => {
+          const quantity = Math.abs(Number(position.positionAmt));
+          const entryPrice = Number(position.entryPrice);
+          const leverage = Math.max(1, Number(position.leverage) || 1);
+          const margin = quantity * entryPrice / leverage;
+          return {
+            id: `exchange:${position.symbol}`,
+            signalId: null,
+            symbol: position.symbol,
+            direction: Number(position.positionAmt) > 0 ? 'LONG' : 'SHORT',
+            entryPrice,
+            exitPrice: null,
+            quantity,
+            leverage,
+            margin: Number(margin.toFixed(4)),
+            pnl: Number(position.unRealizedProfit),
+            pnlPercent: margin > 0 ? (Number(position.unRealizedProfit) / margin) * 100 : 0,
+            status: 'live_open',
+            openedAt: null,
+            closedAt: null,
+            createdAt: new Date(0),
+            updatedAt: new Date(0),
+            signal: null,
+            orders: [],
+            markPrice: Number(position.markPrice),
+            orphanedFromDb: true,
+          };
+        });
+
+      return [...orphanTrades, ...hydratedTrades];
     } catch {
       return trades;
     }
