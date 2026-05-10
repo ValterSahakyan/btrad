@@ -65,21 +65,17 @@ export class PositionMonitorService implements OnModuleInit {
       if (orphanPositions.length === 0) return;
 
       const symbols = orphanPositions.map((position) => position.symbol);
-      await this.prisma.botSettings.updateMany({
-        where: { isPaused: false },
-        data: { isPaused: true },
-      });
-      await this.logsService.error('startup-reconcile', 'Exchange positions found without matching DB trades; bot paused', {
+      await this.logsService.error('startup-reconcile', 'Exchange positions found without matching DB trades; manual review required', {
         symbols,
       });
       await this.logsService.risk(
         'startup_position_mismatch',
-        'Exchange positions found without matching DB trades; bot paused',
+        'Exchange positions found without matching DB trades; manual review required',
         'critical',
         { symbols },
       );
       await this.telegramService.sendMessage(
-        `<b>CRITICAL:</b> startup reconciliation paused the bot.\nOpen Binance positions without DB trades: ${symbols.join(', ')}`,
+        `<b>CRITICAL:</b> startup reconciliation found Binance positions without DB trades.\nManual review required: ${symbols.join(', ')}`,
       );
     } catch (err) {
       await this.logsService.error('startup-reconcile', 'Startup reconciliation failed', {
@@ -281,7 +277,6 @@ export class PositionMonitorService implements OnModuleInit {
   private async refillOpenSlots(): Promise<void> {
     const settings = applyWeekendOverrides(await this.prisma.botSettings.findFirst());
     if (!settings) return;
-    if (settings.isPaused) return;
     if (settings.mode !== 'live') return;
     if (!settings.realTradingEnabled) return;
     if (settings.requireDashboardConfirmation !== false) return;
@@ -344,7 +339,6 @@ export class PositionMonitorService implements OnModuleInit {
   private async ensureContinuousLiveFlow(): Promise<void> {
     const settings = applyWeekendOverrides(await this.prisma.botSettings.findFirst());
     if (!settings) return;
-    if (settings.isPaused) return;
     if (settings.mode !== 'live') return;
     if (!settings.realTradingEnabled) return;
     if (settings.requireDashboardConfirmation !== false) return;

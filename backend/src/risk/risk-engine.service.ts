@@ -3,7 +3,6 @@ import { BinanceService } from '../binance/binance.service';
 import { Direction, RiskValidationResult } from '../common/types/trading.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { applyWeekendOverrides } from '../settings/weekend-settings';
-import { evaluateTradingGuards } from '../settings/trading-guard';
 import { PositionSizeService } from './position-size.service';
 
 type ClosedTradeRow = {
@@ -107,16 +106,6 @@ export class RiskEngineService {
     if (input.riskReward < minRiskReward) messages.push('Risk reward below minimum');
     if (input.spread > 0.4) messages.push('Spread too high');
     if (input.marketRegime === 'no_trade') messages.push('Market regime blocked');
-    for (const guard of evaluateTradingGuards(settings, {
-      direction: input.direction,
-      strategy: input.strategy,
-      openTrades: openTradeRows.map((trade) => ({
-        direction: trade.direction,
-        strategy: trade.signal?.strategy ?? null,
-      })),
-    })) {
-      messages.push(guard);
-    }
     if (positionSize.quantity <= 0) messages.push('Invalid position size');
     const notionalUsd = positionSize.quantity * input.entryPrice;
     if (positionSize.quantity > 0 && notionalUsd < effectiveMinNotional) {

@@ -11,8 +11,7 @@ import { MarketRegimeService } from '../market-regime/market-regime.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RiskEngineService } from '../risk/risk-engine.service';
 import { ConfidenceScoreService } from '../scoring/confidence-score.service';
-import { applyWeekendOverrides, isWeekendUtc } from '../settings/weekend-settings';
-import { isTradingWindowOpen } from '../settings/trading-guard';
+import { applyWeekendOverrides } from '../settings/weekend-settings';
 import { StrategyConfig } from '../strategies/strategy.interface';
 import { StrategySelectorService } from '../strategies/strategy-selector.service';
 import { TelegramService } from '../telegram/telegram.service';
@@ -78,15 +77,6 @@ export class ScannerService {
   private async _runScan(): Promise<{ processed: number; signalsCreated: number }> {
     const baseSettings = await this.prisma.botSettings.findFirst();
     const settings = applyWeekendOverrides(baseSettings);
-    if (settings?.isPaused) {
-      return { processed: 0, signalsCreated: 0 };
-    }
-    if (!isTradingWindowOpen(settings)) {
-      await this.logsService.info('scanner', 'Skipped market scan outside configured trading window', {
-        weekendModeActive: Boolean((baseSettings as { weekendModeEnabled?: boolean } | null)?.weekendModeEnabled && isWeekendUtc()),
-      });
-      return { processed: 0, signalsCreated: 0 };
-    }
     await this.logsService.info('scanner', 'Starting market scan');
     const regime = await this.marketRegimeService.getRegime();
     await this.logsService.info('scanner', `Market regime: ${regime.regime}`, {
@@ -95,7 +85,6 @@ export class ScannerService {
       btcTrend: regime.btcTrend,
       ethTrend: regime.ethTrend,
       caution: regime.caution,
-      weekendModeActive: Boolean((baseSettings as { weekendModeEnabled?: boolean } | null)?.weekendModeEnabled && isWeekendUtc()),
     });
 
     const maxSymbols = settings?.maxSymbolsPerScan ?? 50;

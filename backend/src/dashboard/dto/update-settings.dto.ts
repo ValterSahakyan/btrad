@@ -7,10 +7,6 @@ export class UpdateSettingsDto {
 
   @IsOptional()
   @IsBoolean()
-  isPaused?: boolean;
-
-  @IsOptional()
-  @IsBoolean()
   realTradingEnabled?: boolean;
 
   @IsOptional()
@@ -114,98 +110,6 @@ export class UpdateSettingsDto {
   @Min(1)
   @Max(1_000_000)
   maxPositionUsd?: number;
-
-  @IsOptional()
-  @IsBoolean()
-  weekendModeEnabled?: boolean;
-
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  @Max(50)
-  weekendMaxOpenTrades?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  @Max(100)
-  weekendMinConfidenceScore?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  @Max(100)
-  weekendMinHotScoreForScan?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  @Max(100)
-  weekendRiskPerTradePercent?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  @Max(1_000_000)
-  weekendMaxPositionUsd?: number;
-
-  @IsOptional()
-  @IsBoolean()
-  sessionModeEnabled?: boolean;
-
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  @Max(24)
-  tradingWindowStartHourUtc?: number;
-
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  @Max(24)
-  tradingWindowEndHourUtc?: number;
-
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  @Max(50)
-  maxLongOpenTrades?: number;
-
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  @Max(50)
-  maxShortOpenTrades?: number;
-
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  @Max(50)
-  breakoutMaxOpenTrades?: number;
-
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  @Max(50)
-  pullbackMaxOpenTrades?: number;
-
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  @Max(50)
-  reversionMaxOpenTrades?: number;
-
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  @Max(50)
-  trendReclaimMaxOpenTrades?: number;
-
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  @Max(50)
-  rangeBounceMaxOpenTrades?: number;
 
   @IsOptional()
   @IsBoolean()

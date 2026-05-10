@@ -8,7 +8,6 @@ import { useToast } from '@/hooks/use-toast';
 
 type SettingsState = {
   mode: 'testnet' | 'live';
-  isPaused: boolean;
   enableRealTrading: boolean;
   allowAutoLiveExecution: boolean;
   defaultLeverage: number;
@@ -26,22 +25,6 @@ type SettingsState = {
   minHotScoreForScan: number;
   minConfidenceScore: number;
   minRiskReward: number;
-  weekendModeEnabled: boolean;
-  weekendMaxOpenTrades: number;
-  weekendMinConfidenceScore: number;
-  weekendMinHotScoreForScan: number;
-  weekendRiskPerTradePercent: number;
-  weekendMaxPositionUsd: number;
-  sessionModeEnabled: boolean;
-  tradingWindowStartHourUtc: number;
-  tradingWindowEndHourUtc: number;
-  maxLongOpenTrades: number;
-  maxShortOpenTrades: number;
-  breakoutMaxOpenTrades: number;
-  pullbackMaxOpenTrades: number;
-  reversionMaxOpenTrades: number;
-  trendReclaimMaxOpenTrades: number;
-  rangeBounceMaxOpenTrades: number;
   breakoutEnabled: boolean;
   breakoutMinVolumeRatio: number;
   breakoutLookbackPeriod: number;
@@ -89,7 +72,6 @@ const SECTIONS: Section[] = [
     title: 'General',
     fields: [
       { key: 'mode',                  label: 'Mode' },
-      { key: 'isPaused',              label: 'Bot Paused' },
       { key: 'enableRealTrading',     label: 'Real Trading' },
       { key: 'allowAutoLiveExecution',label: 'Auto-Execute' },
     ],
@@ -117,34 +99,6 @@ const SECTIONS: Section[] = [
       { key: 'minHotScoreForScan',      label: 'Min Hot Score' },
       { key: 'minConfidenceScore',      label: 'Min Confidence' },
       { key: 'minRiskReward',           label: 'Min R/R' },
-    ],
-  },
-  {
-    title: 'Weekend Mode',
-    description: 'Optional Saturday/Sunday UTC overrides for quieter or thinner market conditions.',
-    fields: [
-      { key: 'weekendModeEnabled',         label: 'Enabled' },
-      { key: 'weekendMaxOpenTrades',       label: 'Weekend Max Open' },
-      { key: 'weekendMinConfidenceScore',  label: 'Weekend Min Confidence' },
-      { key: 'weekendMinHotScoreForScan',  label: 'Weekend Min Hot Score' },
-      { key: 'weekendRiskPerTradePercent', label: 'Weekend Risk / Trade', unit: '%' },
-      { key: 'weekendMaxPositionUsd',      label: 'Weekend Max Position', unit: 'USD' },
-    ],
-  },
-  {
-    title: 'Portfolio Guards',
-    description: 'Professional guardrails for when the bot can trade and how concentrated exposure may become.',
-    fields: [
-      { key: 'sessionModeEnabled',         label: 'UTC Session Filter' },
-      { key: 'tradingWindowStartHourUtc',  label: 'Window Start UTC', unit: 'hour' },
-      { key: 'tradingWindowEndHourUtc',    label: 'Window End UTC', unit: 'hour' },
-      { key: 'maxLongOpenTrades',          label: 'Max LONG Open' },
-      { key: 'maxShortOpenTrades',         label: 'Max SHORT Open' },
-      { key: 'breakoutMaxOpenTrades',      label: 'Max Breakout Open' },
-      { key: 'trendReclaimMaxOpenTrades',  label: 'Max Reclaim Open' },
-      { key: 'pullbackMaxOpenTrades',      label: 'Max Pullback Open' },
-      { key: 'rangeBounceMaxOpenTrades',   label: 'Max Range Open' },
-      { key: 'reversionMaxOpenTrades',     label: 'Max Reversion Open' },
     ],
   },
   {
@@ -217,8 +171,7 @@ const SECTIONS: Section[] = [
 ];
 
 const BOOLEAN_KEYS = new Set([
-  'isPaused', 'enableRealTrading', 'allowAutoLiveExecution',
-  'weekendModeEnabled', 'sessionModeEnabled',
+  'enableRealTrading', 'allowAutoLiveExecution',
   'breakoutEnabled', 'pullbackEnabled', 'reversionEnabled', 'trendReclaimEnabled', 'rangeBounceEnabled',
 ]);
 
@@ -233,7 +186,6 @@ const selectCls =
 export function SettingsForm({ settings }: { settings: any }) {
   const [form, setForm] = useState<SettingsState>({
     mode: settings.mode ?? 'testnet',
-    isPaused: settings.isPaused ?? false,
     enableRealTrading: settings.enableRealTrading ?? settings.realTradingEnabled ?? false,
     allowAutoLiveExecution: settings.allowAutoLiveExecution ?? (settings.requireDashboardConfirmation === false),
     defaultLeverage: settings.defaultLeverage ?? 3,
@@ -252,22 +204,6 @@ export function SettingsForm({ settings }: { settings: any }) {
     maxSymbolsPerScan: settings.maxSymbolsPerScan ?? 50,
     minHotScoreForScan: settings.minHotScoreForScan ?? 55,
     breakoutEnabled: settings.breakoutEnabled ?? true,
-    weekendModeEnabled: settings.weekendModeEnabled ?? false,
-    weekendMaxOpenTrades: settings.weekendMaxOpenTrades ?? 0,
-    weekendMinConfidenceScore: settings.weekendMinConfidenceScore ?? 0,
-    weekendMinHotScoreForScan: settings.weekendMinHotScoreForScan ?? 0,
-    weekendRiskPerTradePercent: settings.weekendRiskPerTradePercent ?? 0,
-    weekendMaxPositionUsd: settings.weekendMaxPositionUsd ?? 0,
-    sessionModeEnabled: settings.sessionModeEnabled ?? false,
-    tradingWindowStartHourUtc: settings.tradingWindowStartHourUtc ?? 0,
-    tradingWindowEndHourUtc: settings.tradingWindowEndHourUtc ?? 24,
-    maxLongOpenTrades: settings.maxLongOpenTrades ?? 0,
-    maxShortOpenTrades: settings.maxShortOpenTrades ?? 0,
-    breakoutMaxOpenTrades: settings.breakoutMaxOpenTrades ?? 0,
-    pullbackMaxOpenTrades: settings.pullbackMaxOpenTrades ?? 0,
-    reversionMaxOpenTrades: settings.reversionMaxOpenTrades ?? 0,
-    trendReclaimMaxOpenTrades: settings.trendReclaimMaxOpenTrades ?? 0,
-    rangeBounceMaxOpenTrades: settings.rangeBounceMaxOpenTrades ?? 0,
     breakoutMinVolumeRatio: settings.breakoutMinVolumeRatio ?? 1.5,
     breakoutLookbackPeriod: settings.breakoutLookbackPeriod ?? 20,
     breakoutMaxSlPercent: settings.breakoutMaxSlPercent ?? 5,

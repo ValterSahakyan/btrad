@@ -41,7 +41,6 @@ export async function Topbar() {
   const title = pageTitle[pathname] ?? 'Dashboard';
 
   const status = await fetchApiSafe<Status | null>('/status', null);
-  const paused = status?.botStatus === 'paused';
   const liveMode = status?.mode === 'live';
   const realOn = status?.realTradingEnabled ?? false;
   const autoExec = status?.requireDashboardConfirmation === false;
@@ -65,7 +64,7 @@ export async function Topbar() {
             </span>
           )}
           <span className="w-px h-3 bg-border mx-1" />
-          <Pill label={paused ? 'Paused' : 'Running'} tone={paused ? 'neg' : 'pos'} />
+          <Pill label="Running" tone="pos" />
           <Pill label={liveMode ? 'Live' : 'Testnet'} tone={liveMode ? 'acc' : 'warn'} />
           {realOn && <Pill label="Real ON" tone="pos" />}
           {autoExec && <Pill label="Auto-Exec" tone="neg" />}

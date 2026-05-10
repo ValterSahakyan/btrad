@@ -73,7 +73,7 @@ export class DashboardController {
         : 'live_manual'
       : 'signal_only';
     return {
-      botStatus: settings?.isPaused ? 'paused' : 'running',
+      botStatus: 'running',
       mode: settings?.mode ?? 'testnet',
       realTradingEnabled: settings?.realTradingEnabled ?? false,
       enableRealTrading: settings?.realTradingEnabled ?? false,
@@ -148,7 +148,6 @@ export class DashboardController {
     const existing = await this.getSettings();
     const preset: UpdateSettingsDto = {
       mode: 'testnet',
-      isPaused: true,
       enableRealTrading: false,
       allowAutoLiveExecution: false,
       defaultLeverage: 3,
@@ -166,22 +165,6 @@ export class DashboardController {
       minHotScoreForScan: 60,
       minConfidenceScore: 78,
       minRiskReward: 1.3,
-      weekendModeEnabled: true,
-      weekendMaxOpenTrades: 8,
-      weekendMinConfidenceScore: 82,
-      weekendMinHotScoreForScan: 65,
-      weekendRiskPerTradePercent: 0.5,
-      weekendMaxPositionUsd: 3,
-      sessionModeEnabled: true,
-      tradingWindowStartHourUtc: 6,
-      tradingWindowEndHourUtc: 22,
-      maxLongOpenTrades: 5,
-      maxShortOpenTrades: 3,
-      breakoutMaxOpenTrades: 4,
-      pullbackMaxOpenTrades: 2,
-      reversionMaxOpenTrades: 0,
-      trendReclaimMaxOpenTrades: 3,
-      rangeBounceMaxOpenTrades: 2,
       breakoutEnabled: true,
       breakoutMinVolumeRatio: 1.8,
       breakoutLookbackPeriod: 20,
@@ -239,35 +222,38 @@ export class DashboardController {
 
     return {
       ...serializeSettings(updated),
-      message: 'Micro-account preset applied for a $43 balance. Bot paused, testnet/manual mode enforced.',
+      message: 'Micro-account preset applied for a $43 balance. Testnet/manual mode enforced.',
     };
   }
 
   @Post('/bot/pause')
   async pauseBot(@Req() request: Request) {
     const settings = await this.getSettings();
-    const updated = await this.prisma.botSettings.update({ where: { id: settings.id }, data: { isPaused: true } });
-    await this.logsService.audit('bot.paused', getActor(request), {});
-    return updated;
+    await this.logsService.audit('bot.pause_ignored', getActor(request), {});
+    return {
+      ...settings,
+      message: 'Pause state has been removed. Use mode and real-trading settings to control execution.',
+    };
   }
 
   @Post('/bot/stop')
   async stopBot(@Req() request: Request) {
     const settings = await this.getSettings();
-    const updated = await this.prisma.botSettings.update({ where: { id: settings.id }, data: { isPaused: true } });
-    await this.logsService.audit('bot.stopped', getActor(request), {});
+    await this.logsService.audit('bot.stop_ignored', getActor(request), {});
     return {
-      ...updated,
-      message: 'Bot stopped.',
+      ...settings,
+      message: 'Stop no longer uses a pause flag. Change live trading settings instead.',
     };
   }
 
   @Post('/bot/resume')
   async resumeBot(@Req() request: Request) {
     const settings = await this.getSettings();
-    const updated = await this.prisma.botSettings.update({ where: { id: settings.id }, data: { isPaused: false } });
-    await this.logsService.audit('bot.resumed', getActor(request), {});
-    return updated;
+    await this.logsService.audit('bot.resume_ignored', getActor(request), {});
+    return {
+      ...settings,
+      message: 'Resume no longer changes a pause flag.',
+    };
   }
 
   @Post('/bot/start')
@@ -275,7 +261,6 @@ export class DashboardController {
     const actor = getActor(request);
     const settings = await this.getSettings();
 
-    await this.prisma.botSettings.update({ where: { id: settings.id }, data: { isPaused: false } });
     const sync = await this.scannerService.syncSymbols();
     const scan = await this.scannerService.runScan();
 
@@ -297,22 +282,22 @@ export class DashboardController {
   async emergencyStop(@Req() request: Request) {
     const actor = getActor(request);
     const settings = await this.getSettings();
-    const [updated] = await Promise.all([
-      this.prisma.botSettings.update({ where: { id: settings.id }, data: { isPaused: true } }),
-      this.prisma.signal.updateMany({
-        where: { status: { in: ['active', 'pending', 'approved'] } },
-        data: { status: 'cancelled' },
-      }),
-    ]);
+    await this.prisma.signal.updateMany({
+      where: { status: { in: ['active', 'pending', 'approved'] } },
+      data: { status: 'cancelled' },
+    });
 
     await this.logsService.audit('bot.emergency_stop', actor, {});
-    await this.logsService.risk('emergency_stop', 'Emergency stop activated; bot paused and pending signals cancelled', 'critical', {
+    await this.logsService.risk('emergency_stop', 'Emergency stop activated; pending signals cancelled', 'critical', {
       actor,
     });
     await this.telegramService.sendMessage(
-      `<b>EMERGENCY STOP</b>\nActor: ${actor}\nBot paused and pending signals cancelled.`,
+      `<b>EMERGENCY STOP</b>\nActor: ${actor}\nPending signals cancelled.`,
     );
-    return updated;
+    return {
+      ...settings,
+      message: 'Emergency stop cancelled pending signals. The pause flag is no longer used.',
+    };
   }
 
   @Post('/bot/sync-symbols')
@@ -470,22 +455,6 @@ export class DashboardController {
       'maxConsecutiveLosses',
       'minPositionUsd',
       'maxPositionUsd',
-      'weekendModeEnabled',
-      'weekendMaxOpenTrades',
-      'weekendMinConfidenceScore',
-      'weekendMinHotScoreForScan',
-      'weekendRiskPerTradePercent',
-      'weekendMaxPositionUsd',
-      'sessionModeEnabled',
-      'tradingWindowStartHourUtc',
-      'tradingWindowEndHourUtc',
-      'maxLongOpenTrades',
-      'maxShortOpenTrades',
-      'breakoutMaxOpenTrades',
-      'pullbackMaxOpenTrades',
-      'reversionMaxOpenTrades',
-      'trendReclaimMaxOpenTrades',
-      'rangeBounceMaxOpenTrades',
       'requireDashboardConfirmation',
       'allowAutoLiveExecution',
     ];
@@ -699,21 +668,6 @@ function validateSettingsConsistency(body: UpdateSettingsDto): void {
     throw new BadRequestException('Pullback short RSI min must be less than or equal to max');
   }
 
-  if (
-    body.maxOpenTrades !== undefined &&
-    body.maxLongOpenTrades !== undefined &&
-    body.maxLongOpenTrades > body.maxOpenTrades
-  ) {
-    throw new BadRequestException('Max LONG open trades cannot exceed maxOpenTrades');
-  }
-
-  if (
-    body.maxOpenTrades !== undefined &&
-    body.maxShortOpenTrades !== undefined &&
-    body.maxShortOpenTrades > body.maxOpenTrades
-  ) {
-    throw new BadRequestException('Max SHORT open trades cannot exceed maxOpenTrades');
-  }
 }
 
 function getActor(request: Request): string {
@@ -722,6 +676,23 @@ function getActor(request: Request): string {
 
 function normalizeSettingsUpdate(body: UpdateSettingsDto): UpdateSettingsDto {
   const normalized: UpdateSettingsDto = { ...body };
+  delete (normalized as UpdateSettingsDto & { isPaused?: boolean }).isPaused;
+  delete (normalized as UpdateSettingsDto & { weekendModeEnabled?: boolean }).weekendModeEnabled;
+  delete (normalized as UpdateSettingsDto & { weekendMaxOpenTrades?: number }).weekendMaxOpenTrades;
+  delete (normalized as UpdateSettingsDto & { weekendMinConfidenceScore?: number }).weekendMinConfidenceScore;
+  delete (normalized as UpdateSettingsDto & { weekendMinHotScoreForScan?: number }).weekendMinHotScoreForScan;
+  delete (normalized as UpdateSettingsDto & { weekendRiskPerTradePercent?: number }).weekendRiskPerTradePercent;
+  delete (normalized as UpdateSettingsDto & { weekendMaxPositionUsd?: number }).weekendMaxPositionUsd;
+  delete (normalized as UpdateSettingsDto & { sessionModeEnabled?: boolean }).sessionModeEnabled;
+  delete (normalized as UpdateSettingsDto & { tradingWindowStartHourUtc?: number }).tradingWindowStartHourUtc;
+  delete (normalized as UpdateSettingsDto & { tradingWindowEndHourUtc?: number }).tradingWindowEndHourUtc;
+  delete (normalized as UpdateSettingsDto & { maxLongOpenTrades?: number }).maxLongOpenTrades;
+  delete (normalized as UpdateSettingsDto & { maxShortOpenTrades?: number }).maxShortOpenTrades;
+  delete (normalized as UpdateSettingsDto & { breakoutMaxOpenTrades?: number }).breakoutMaxOpenTrades;
+  delete (normalized as UpdateSettingsDto & { pullbackMaxOpenTrades?: number }).pullbackMaxOpenTrades;
+  delete (normalized as UpdateSettingsDto & { reversionMaxOpenTrades?: number }).reversionMaxOpenTrades;
+  delete (normalized as UpdateSettingsDto & { trendReclaimMaxOpenTrades?: number }).trendReclaimMaxOpenTrades;
+  delete (normalized as UpdateSettingsDto & { rangeBounceMaxOpenTrades?: number }).rangeBounceMaxOpenTrades;
 
   if (body.enableRealTrading !== undefined) {
     normalized.realTradingEnabled = body.enableRealTrading;
@@ -737,9 +708,47 @@ function normalizeSettingsUpdate(body: UpdateSettingsDto): UpdateSettingsDto {
 }
 
 function serializeSettings<T extends { realTradingEnabled: boolean; requireDashboardConfirmation: boolean }>(settings: T) {
+  const {
+    isPaused: _ignored,
+    weekendModeEnabled: _weekendModeEnabled,
+    weekendMaxOpenTrades: _weekendMaxOpenTrades,
+    weekendMinConfidenceScore: _weekendMinConfidenceScore,
+    weekendMinHotScoreForScan: _weekendMinHotScoreForScan,
+    weekendRiskPerTradePercent: _weekendRiskPerTradePercent,
+    weekendMaxPositionUsd: _weekendMaxPositionUsd,
+    sessionModeEnabled: _sessionModeEnabled,
+    tradingWindowStartHourUtc: _tradingWindowStartHourUtc,
+    tradingWindowEndHourUtc: _tradingWindowEndHourUtc,
+    maxLongOpenTrades: _maxLongOpenTrades,
+    maxShortOpenTrades: _maxShortOpenTrades,
+    breakoutMaxOpenTrades: _breakoutMaxOpenTrades,
+    pullbackMaxOpenTrades: _pullbackMaxOpenTrades,
+    reversionMaxOpenTrades: _reversionMaxOpenTrades,
+    trendReclaimMaxOpenTrades: _trendReclaimMaxOpenTrades,
+    rangeBounceMaxOpenTrades: _rangeBounceMaxOpenTrades,
+    ...rest
+  } = settings as T & {
+    isPaused?: boolean;
+    weekendModeEnabled?: boolean;
+    weekendMaxOpenTrades?: number;
+    weekendMinConfidenceScore?: number;
+    weekendMinHotScoreForScan?: number;
+    weekendRiskPerTradePercent?: number;
+    weekendMaxPositionUsd?: number;
+    sessionModeEnabled?: boolean;
+    tradingWindowStartHourUtc?: number;
+    tradingWindowEndHourUtc?: number;
+    maxLongOpenTrades?: number;
+    maxShortOpenTrades?: number;
+    breakoutMaxOpenTrades?: number;
+    pullbackMaxOpenTrades?: number;
+    reversionMaxOpenTrades?: number;
+    trendReclaimMaxOpenTrades?: number;
+    rangeBounceMaxOpenTrades?: number;
+  };
   return {
-    ...settings,
-    enableRealTrading: settings.realTradingEnabled,
-    allowAutoLiveExecution: settings.requireDashboardConfirmation === false,
+    ...rest,
+    enableRealTrading: rest.realTradingEnabled,
+    allowAutoLiveExecution: rest.requireDashboardConfirmation === false,
   };
 }

@@ -3,7 +3,6 @@ import { Prisma } from '@prisma/client';
 import { BinanceService } from '../binance/binance.service';
 import { LogsService } from '../logs/logs.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { evaluateTradingGuards } from '../settings/trading-guard';
 import { applyWeekendOverrides } from '../settings/weekend-settings';
 import { TelegramService } from '../telegram/telegram.service';
 
@@ -85,19 +84,6 @@ export class OrderExecutionService {
     if (existingTrade) {
       await revertToActive();
       throw new BadRequestException(`A live trade for ${signal.symbol.symbol} is already open`);
-    }
-
-    const tradingGuardErrors = evaluateTradingGuards(settings, {
-      direction: signal.direction,
-      strategy: signal.strategy,
-      openTrades: openTradeRows.map((trade) => ({
-        direction: trade.direction,
-        strategy: trade.signal?.strategy ?? null,
-      })),
-    });
-    if (tradingGuardErrors.length > 0) {
-      await revertToActive();
-      throw new BadRequestException(tradingGuardErrors[0]);
     }
 
     const sym = signal.symbol;

@@ -48,9 +48,7 @@ export default async function SettingsPage() {
               <Badge tone={isLive ? 'positive' : 'warning'}>{settings.mode}</Badge>
             </Row>
             <Row label="Status">
-              <Badge tone={settings.isPaused ? 'danger' : 'positive'}>
-                {settings.isPaused ? 'Paused' : 'Running'}
-              </Badge>
+              <Badge tone="positive">Running</Badge>
             </Row>
             <Row label="Real Trading">
               <Badge tone={realOn ? 'positive' : 'danger'}>{realOn ? 'ON' : 'OFF'}</Badge>
@@ -114,7 +112,7 @@ export default async function SettingsPage() {
           <div className="panel p-4">
             <div className="mb-3 text-[11px] font-medium uppercase tracking-widest text-dim">Controls</div>
             <p className="mb-3 text-[11px] leading-relaxed text-dim">
-              Start syncs symbols and runs one scanner cycle immediately. Stop pauses new signals and orders.
+              Start syncs symbols and runs one scanner cycle immediately.
             </p>
             <div className="flex gap-2">
               <ActionButton
@@ -123,16 +121,7 @@ export default async function SettingsPage() {
                 variant="default"
                 size="sm"
                 confirmTitle="Start Bot"
-                confirmMessage="Unpause the bot, sync symbols from Binance, and run one scanner cycle immediately?"
-              />
-              <ActionButton
-                label="Stop Bot"
-                path="/bot/stop"
-                variant="danger"
-                size="sm"
-                confirmTitle="Stop Bot"
-                confirmMessage="Pause the bot? No new signals or trades will be opened until you start it again."
-                confirmVariant="danger"
+                confirmMessage="Sync symbols from Binance and run one scanner cycle immediately?"
               />
             </div>
           </div>

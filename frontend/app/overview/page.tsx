@@ -35,13 +35,13 @@ function tradeStatus(s: string) {
 }
 function logLevel(l: string) {
   if (l === 'error') return <span className="font-mono text-[10px] font-semibold text-danger uppercase">{l}</span>;
-  if (l === 'warn')  return <span className="font-mono text-[10px] font-semibold text-warning uppercase">{l}</span>;
-  if (l === 'info')  return <span className="font-mono text-[10px] text-accent uppercase">{l}</span>;
+  if (l === 'warn') return <span className="font-mono text-[10px] font-semibold text-warning uppercase">{l}</span>;
+  if (l === 'info') return <span className="font-mono text-[10px] text-accent uppercase">{l}</span>;
   return <span className="font-mono text-[10px] text-dim uppercase">{l}</span>;
 }
 
 function execMode(m: string) {
-  if (m === 'live_auto')   return 'Live Auto';
+  if (m === 'live_auto') return 'Live Auto';
   if (m === 'live_manual') return 'Live Manual';
   return 'Signal Only';
 }
@@ -58,25 +58,15 @@ export default async function OverviewPage() {
   ]);
 
   const totalPnl = perf.totalPnl ?? 0;
-  const isRunning = status.botStatus === 'running';
 
   return (
     <div className="space-y-4">
-      {/* Status banner — only when paused */}
-      {status.botStatus === 'paused' && (
-        <div className="flex items-center gap-2 rounded border border-danger/20 bg-danger/5 px-4 py-2.5 text-[12px] text-danger">
-          <span className="font-mono">!</span>
-          Bot is paused — no new signals or trades. Go to Settings to resume.
-        </div>
-      )}
-
-      {/* KPI row */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <MetricCard
           label="Bot Status"
-          value={isRunning ? 'Running' : status.botStatus}
+          value="Running"
           hint={`${status.mode} · ${execMode(status.executionMode)}`}
-          tone={isRunning ? 'positive' : 'danger'}
+          tone="positive"
           mono={false}
         />
         <MetricCard
@@ -93,7 +83,7 @@ export default async function OverviewPage() {
         <MetricCard
           label="Profit Factor"
           value={number(perf.profitFactor)}
-          hint="Win $ ÷ Loss $"
+          hint="Win $ / Loss $"
           tone={(perf.profitFactor ?? 0) >= 1 ? 'positive' : 'danger'}
         />
         <MetricCard
@@ -109,10 +99,9 @@ export default async function OverviewPage() {
         />
       </div>
 
-      {/* Chart + stat column */}
       <div className="grid gap-3 xl:grid-cols-[1fr_200px]">
         <PnlChart data={daily.map((d) => ({ ...d, createdAt: new Date(d.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), pnl: d.pnl ?? 0 }))} />
-        <div className="grid grid-cols-2 xl:grid-cols-1 gap-3">
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-1">
           <MetricCard label="Avg Win" value={currency(perf.averageWin)} tone="positive" />
           <MetricCard label="Avg Loss" value={currency(perf.averageLoss)} tone="danger" />
           <MetricCard label="Signals" value={String(status.activeSignals)} hint="active" />
@@ -120,7 +109,6 @@ export default async function OverviewPage() {
         </div>
       </div>
 
-      {/* Recent data */}
       <div className="grid gap-3 xl:grid-cols-3">
         <DataTable
           title="Recent Signals"
@@ -148,7 +136,7 @@ export default async function OverviewPage() {
           rows={logs.slice(0, 8).map((l) => [
             logLevel(l.level),
             <span key="src" className="text-dim text-[11px]">{l.source}</span>,
-            <span key="msg" className="text-[11px] text-white/80 max-w-[200px] truncate block">{l.message}</span>,
+            <span key="msg" className="block max-w-[200px] truncate text-[11px] text-white/80">{l.message}</span>,
           ])}
         />
       </div>

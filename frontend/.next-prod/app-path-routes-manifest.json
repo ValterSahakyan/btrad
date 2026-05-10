@@ -2,13 +2,13 @@
   "/api/auth/clear/route": "/api/auth/clear",
   "/_not-found/page": "/_not-found",
   "/icon.svg/route": "/icon.svg",
+  "/logs/page": "/logs",
   "/hot-coins/page": "/hot-coins",
   "/login/page": "/login",
-  "/logs/page": "/logs",
+  "/overview/page": "/overview",
   "/page": "/",
-  "/settings/page": "/settings",
   "/performance/page": "/performance",
   "/signals/page": "/signals",
-  "/overview/page": "/overview",
+  "/settings/page": "/settings",
   "/trades/page": "/trades"
 }
