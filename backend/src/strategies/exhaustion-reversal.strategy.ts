@@ -42,6 +42,14 @@ export class ExhaustionReversalStrategy implements TradingStrategy {
 
     const vwapDeviation = currentVwap > 0 ? ((currentPrice - currentVwap) / currentVwap) * 100 : 0;
     const strategyScore = 74;
+    const hostileBullTrend = context.marketRegime.regime === 'bullish';
+    const hostileBearTrend = context.marketRegime.regime === 'bearish';
+    const countertrendShortAllowed =
+      !hostileBullTrend ||
+      (currentRsi > cfg.rsiOverbought + 4 && vwapDeviation > cfg.vwapDeviationPct + 0.5);
+    const countertrendLongAllowed =
+      !hostileBearTrend ||
+      (currentRsi < cfg.rsiOversold - 4 && vwapDeviation < -(cfg.vwapDeviationPct + 0.5));
 
     // SHORT: price exhausted after sharp pump
     if (
@@ -51,7 +59,7 @@ export class ExhaustionReversalStrategy implements TradingStrategy {
       volumeDeclining &&
       prevCandle.close > prevCandle.open &&
       lastCandle.close < lastCandle.open &&
-      context.marketRegime.regime !== 'bullish'
+      countertrendShortAllowed
     ) {
       const recentHigh = Math.max(...candles15m.slice(-5).map((c) => c.high));
       const stopLoss = recentHigh + atr14 * 0.5;
@@ -91,7 +99,7 @@ export class ExhaustionReversalStrategy implements TradingStrategy {
       volumeDeclining &&
       prevCandle.close < prevCandle.open &&
       lastCandle.close > lastCandle.open &&
-      context.marketRegime.regime !== 'bearish'
+      countertrendLongAllowed
     ) {
       const recentLow = Math.min(...candles15m.slice(-5).map((c) => c.low));
       const stopLoss = recentLow - atr14 * 0.5;

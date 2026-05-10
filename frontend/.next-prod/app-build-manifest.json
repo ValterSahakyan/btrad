@@ -7,19 +7,19 @@
       "static/chunks/main-app-84df66590aa4504b.js",
       "static/chunks/app/_not-found/page-f27f51600c5c0889.js"
     ],
-    "/api/auth/clear/route": [
-      "static/chunks/webpack-8d8bbcad96149178.js",
-      "static/chunks/c7879cf7-93b1c04336dd24e6.js",
-      "static/chunks/131-f3cc4064273a0cb2.js",
-      "static/chunks/main-app-84df66590aa4504b.js",
-      "static/chunks/app/api/auth/clear/route-955c6b8e4df1e078.js"
-    ],
     "/api/backend/[...path]/route": [
       "static/chunks/webpack-8d8bbcad96149178.js",
       "static/chunks/c7879cf7-93b1c04336dd24e6.js",
       "static/chunks/131-f3cc4064273a0cb2.js",
       "static/chunks/main-app-84df66590aa4504b.js",
       "static/chunks/app/api/backend/[...path]/route-955c6b8e4df1e078.js"
+    ],
+    "/api/auth/clear/route": [
+      "static/chunks/webpack-8d8bbcad96149178.js",
+      "static/chunks/c7879cf7-93b1c04336dd24e6.js",
+      "static/chunks/131-f3cc4064273a0cb2.js",
+      "static/chunks/main-app-84df66590aa4504b.js",
+      "static/chunks/app/api/auth/clear/route-955c6b8e4df1e078.js"
     ],
     "/layout": [
       "static/chunks/webpack-8d8bbcad96149178.js",
@@ -44,14 +44,6 @@
       "static/chunks/main-app-84df66590aa4504b.js",
       "static/chunks/app/hot-coins/page-955c6b8e4df1e078.js"
     ],
-    "/logs/page": [
-      "static/chunks/webpack-8d8bbcad96149178.js",
-      "static/chunks/c7879cf7-93b1c04336dd24e6.js",
-      "static/chunks/131-f3cc4064273a0cb2.js",
-      "static/chunks/main-app-84df66590aa4504b.js",
-      "static/chunks/765-4f0a4e0beefccabd.js",
-      "static/chunks/app/logs/page-d0073c1a015c539c.js"
-    ],
     "/login/page": [
       "static/chunks/webpack-8d8bbcad96149178.js",
       "static/chunks/c7879cf7-93b1c04336dd24e6.js",
@@ -66,6 +58,14 @@
       "static/chunks/main-app-84df66590aa4504b.js",
       "static/chunks/742-3ff9bc7ea8de559c.js",
       "static/chunks/app/overview/page-bc0d770d448e9b50.js"
+    ],
+    "/logs/page": [
+      "static/chunks/webpack-8d8bbcad96149178.js",
+      "static/chunks/c7879cf7-93b1c04336dd24e6.js",
+      "static/chunks/131-f3cc4064273a0cb2.js",
+      "static/chunks/main-app-84df66590aa4504b.js",
+      "static/chunks/765-4f0a4e0beefccabd.js",
+      "static/chunks/app/logs/page-d0073c1a015c539c.js"
     ],
     "/page": [
       "static/chunks/webpack-8d8bbcad96149178.js",
@@ -82,6 +82,14 @@
       "static/chunks/765-4f0a4e0beefccabd.js",
       "static/chunks/app/settings/page-c52c0c11d283ccd0.js"
     ],
+    "/trades/page": [
+      "static/chunks/webpack-8d8bbcad96149178.js",
+      "static/chunks/c7879cf7-93b1c04336dd24e6.js",
+      "static/chunks/131-f3cc4064273a0cb2.js",
+      "static/chunks/main-app-84df66590aa4504b.js",
+      "static/chunks/765-4f0a4e0beefccabd.js",
+      "static/chunks/app/trades/page-43b84d17b5c1cdd3.js"
+    ],
     "/signals/page": [
       "static/chunks/webpack-8d8bbcad96149178.js",
       "static/chunks/c7879cf7-93b1c04336dd24e6.js",
@@ -96,14 +104,6 @@
       "static/chunks/131-f3cc4064273a0cb2.js",
       "static/chunks/main-app-84df66590aa4504b.js",
       "static/chunks/app/performance/page-955c6b8e4df1e078.js"
-    ],
-    "/trades/page": [
-      "static/chunks/webpack-8d8bbcad96149178.js",
-      "static/chunks/c7879cf7-93b1c04336dd24e6.js",
-      "static/chunks/131-f3cc4064273a0cb2.js",
-      "static/chunks/main-app-84df66590aa4504b.js",
-      "static/chunks/765-4f0a4e0beefccabd.js",
-      "static/chunks/app/trades/page-43b84d17b5c1cdd3.js"
     ]
   }
 }

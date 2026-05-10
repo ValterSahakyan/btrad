@@ -182,12 +182,13 @@ export class ScannerService {
           noStrategyCandidate += 1;
           continue;
         }
-        let selected: {
+        const selectableCandidates: Array<{
           candidate: (typeof candidates)[number];
           confidenceScore: number;
           risk: Awaited<ReturnType<RiskEngineService['validateSignal']>>;
           expiresAt: Date;
-        } | null = null;
+          selectionScore: number;
+        }> = [];
         let hadUnblockedCandidate = false;
 
         for (const candidate of candidates) {
@@ -244,11 +245,20 @@ export class ScannerService {
             continue;
           }
 
-          selected = { candidate, confidenceScore, risk, expiresAt };
-          break;
+          selectableCandidates.push({
+            candidate,
+            confidenceScore,
+            risk,
+            expiresAt,
+            selectionScore: computeSelectionScore({
+              candidate,
+              confidenceScore,
+              riskScore: risk.riskScore,
+            }),
+          });
         }
 
-        if (!selected) {
+        if (selectableCandidates.length === 0) {
           if (hadUnblockedCandidate) {
             riskRejected += 1;
           } else {
@@ -257,6 +267,8 @@ export class ScannerService {
           continue;
         }
 
+        selectableCandidates.sort((a, b) => b.selectionScore - a.selectionScore);
+        const selected = selectableCandidates[0];
         const { candidate, confidenceScore, risk, expiresAt } = selected;
 
         // Skip if already have an open trade for this symbol
@@ -481,6 +493,24 @@ export class ScannerService {
 
 function effectiveMinConfidence(base: number, strategy: string): number {
   return base;
+}
+
+function computeSelectionScore(input: {
+  candidate: {
+    strategyScore: number;
+    riskReward: number;
+    direction: 'LONG' | 'SHORT';
+  };
+  confidenceScore: number;
+  riskScore: number;
+}): number {
+  return (
+    input.confidenceScore * 100 +
+    input.riskScore * 10 +
+    input.candidate.strategyScore +
+    input.candidate.riskReward * 5 +
+    (input.candidate.direction === 'SHORT' ? 0.5 : 0)
+  );
 }
 
 function getBotVersionTag(): string {

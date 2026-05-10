@@ -1,15 +1,15 @@
 {
-  "/api/auth/clear/route": "/api/auth/clear",
   "/api/backend/[...path]/route": "/api/backend/[...path]",
-  "/_not-found/page": "/_not-found",
+  "/api/auth/clear/route": "/api/auth/clear",
   "/icon.svg/route": "/icon.svg",
+  "/_not-found/page": "/_not-found",
   "/hot-coins/page": "/hot-coins",
-  "/logs/page": "/logs",
   "/login/page": "/login",
   "/overview/page": "/overview",
+  "/logs/page": "/logs",
   "/page": "/",
   "/settings/page": "/settings",
+  "/trades/page": "/trades",
   "/signals/page": "/signals",
-  "/performance/page": "/performance",
-  "/trades/page": "/trades"
+  "/performance/page": "/performance"
 }

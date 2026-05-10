@@ -112,7 +112,7 @@ export default async function OverviewPage() {
         <div className="grid grid-cols-2 gap-3 xl:grid-cols-1">
           <MetricCard label="Avg Win" value={currency(perf.averageWin)} tone="positive" />
           <MetricCard label="Avg Loss" value={currency(perf.averageLoss)} tone="danger" />
-          <MetricCard label="Signals" value={String(status.activeSignals)} hint="active" />
+          <MetricCard label="Signals" value={String(status.activeSignals)} hint="live / queued" />
           <MetricCard label="Open" value={String(status.openTrades)} hint="live trades" />
         </div>
       </div>

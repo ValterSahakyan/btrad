@@ -65,7 +65,9 @@ export class DashboardController {
   @Get('/status')
   async getStatus() {
     const settings = await this.prisma.botSettings.findFirst();
-    const activeSignals = await this.prisma.signal.count({ where: { status: 'active' } });
+    const activeSignals = await this.prisma.signal.count({
+      where: { status: { in: ['active', 'pending', 'approved', 'live_executed'] } },
+    });
     const dbOpenTrades = await this.prisma.trade.count({ where: { status: 'live_open' } });
     let exchangeOpenTrades = dbOpenTrades;
     if (settings?.mode === 'live' && this.binanceService.hasApiKeys()) {
