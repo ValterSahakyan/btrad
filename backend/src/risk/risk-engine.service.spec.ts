@@ -16,6 +16,7 @@ describe('RiskEngineService', () => {
     const result = await service.validateSignal({
       symbol: 'BTCUSDT',
       direction: 'LONG',
+      strategy: 'breakout_volume',
       entryPrice: 100,
       stopLoss: 99,
       riskReward: 2,

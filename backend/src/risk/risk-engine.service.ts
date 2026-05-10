@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { BinanceService } from '../binance/binance.service';
 import { Direction, RiskValidationResult } from '../common/types/trading.types';
 import { PrismaService } from '../prisma/prisma.service';
+import { applyWeekendOverrides } from '../settings/weekend-settings';
+import { evaluateTradingGuards } from '../settings/trading-guard';
 import { PositionSizeService } from './position-size.service';
 
 type ClosedTradeRow = {
@@ -26,13 +28,23 @@ export class RiskEngineService {
     confidenceScore: number;
     expiresAt: Date;
     marketRegime: string;
+    strategy: string;
     stepSize?: number;
     minNotional?: number;
   }): Promise<RiskValidationResult> {
-    const settings = await this.prisma.botSettings.findFirst();
-    const openTrades = await this.prisma.trade.count({
+    const settings = applyWeekendOverrides(await this.prisma.botSettings.findFirst());
+    const openTradeRows = await this.prisma.trade.findMany({
       where: { status: 'live_open' },
+      select: {
+        direction: true,
+        signal: {
+          select: {
+            strategy: true,
+          },
+        },
+      },
     });
+    const openTrades = openTradeRows.length;
     const todayStart = new Date();
     todayStart.setUTCHours(0, 0, 0, 0);
     const closedTrades: ClosedTradeRow[] = await this.prisma.trade.findMany({
@@ -95,6 +107,16 @@ export class RiskEngineService {
     if (input.riskReward < minRiskReward) messages.push('Risk reward below minimum');
     if (input.spread > 0.4) messages.push('Spread too high');
     if (input.marketRegime === 'no_trade') messages.push('Market regime blocked');
+    for (const guard of evaluateTradingGuards(settings, {
+      direction: input.direction,
+      strategy: input.strategy,
+      openTrades: openTradeRows.map((trade) => ({
+        direction: trade.direction,
+        strategy: trade.signal?.strategy ?? null,
+      })),
+    })) {
+      messages.push(guard);
+    }
     if (positionSize.quantity <= 0) messages.push('Invalid position size');
     const notionalUsd = positionSize.quantity * input.entryPrice;
     if (positionSize.quantity > 0 && notionalUsd < effectiveMinNotional) {

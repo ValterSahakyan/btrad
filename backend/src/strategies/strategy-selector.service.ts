@@ -18,6 +18,10 @@ export class StrategySelectorService {
   ) {}
 
   evaluate(context: StrategyContext): StrategySignalCandidate | null {
+    return this.evaluateAll(context).at(0) ?? null;
+  }
+
+  evaluateAll(context: StrategyContext): StrategySignalCandidate[] {
     const candidates: StrategySignalCandidate[] = [];
 
     for (const strategy of [
@@ -31,8 +35,18 @@ export class StrategySelectorService {
       if (signal) candidates.push(signal);
     }
 
-    if (candidates.length === 0) return null;
-
-    return candidates.reduce((best, c) => (c.strategyScore > best.strategyScore ? c : best));
+    return candidates.sort((a, b) => rankCandidate(b) - rankCandidate(a));
   }
+}
+
+function rankCandidate(candidate: StrategySignalCandidate): number {
+  const strategyBias =
+    candidate.strategy === 'breakout_volume' ? 5
+      : candidate.strategy === 'trend_reclaim' ? 4
+        : candidate.strategy === 'range_bounce' ? 2
+          : candidate.strategy === 'pullback_continuation' ? -2
+            : candidate.strategy === 'mean_reversion' ? -4
+              : 0;
+
+  return candidate.strategyScore + strategyBias;
 }

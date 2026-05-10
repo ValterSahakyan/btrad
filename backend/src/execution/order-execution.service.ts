@@ -3,6 +3,8 @@ import { Prisma } from '@prisma/client';
 import { BinanceService } from '../binance/binance.service';
 import { LogsService } from '../logs/logs.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { evaluateTradingGuards } from '../settings/trading-guard';
+import { applyWeekendOverrides } from '../settings/weekend-settings';
 import { TelegramService } from '../telegram/telegram.service';
 
 @Injectable()
@@ -46,7 +48,7 @@ export class OrderExecutionService {
       throw new BadRequestException('Signal has expired');
     }
 
-    const settings = await this.prisma.botSettings.findFirst();
+    const settings = applyWeekendOverrides(await this.prisma.botSettings.findFirst());
     if (!settings?.realTradingEnabled) {
       await revertToActive();
       throw new BadRequestException('Real trading is not enabled in settings');
@@ -58,12 +60,23 @@ export class OrderExecutionService {
 
     // Re-check limits at execution time (may have changed since signal was created).
     // These reads are independent, so run them together to reduce entry latency.
-    const [openTrades, existingTrade] = await Promise.all([
-      this.prisma.trade.count({ where: { status: 'live_open' } }),
+    const [openTradeRows, existingTrade] = await Promise.all([
+      this.prisma.trade.findMany({
+        where: { status: 'live_open' },
+        select: {
+          direction: true,
+          signal: {
+            select: {
+              strategy: true,
+            },
+          },
+        },
+      }),
       this.prisma.trade.findFirst({
         where: { symbol: signal.symbol.symbol, status: 'live_open' },
       }),
     ]);
+    const openTrades = openTradeRows.length;
     if (openTrades >= (settings.maxOpenTrades ?? 2)) {
       await revertToActive();
       throw new BadRequestException(`Max open trades limit reached (${settings.maxOpenTrades})`);
@@ -72,6 +85,19 @@ export class OrderExecutionService {
     if (existingTrade) {
       await revertToActive();
       throw new BadRequestException(`A live trade for ${signal.symbol.symbol} is already open`);
+    }
+
+    const tradingGuardErrors = evaluateTradingGuards(settings, {
+      direction: signal.direction,
+      strategy: signal.strategy,
+      openTrades: openTradeRows.map((trade) => ({
+        direction: trade.direction,
+        strategy: trade.signal?.strategy ?? null,
+      })),
+    });
+    if (tradingGuardErrors.length > 0) {
+      await revertToActive();
+      throw new BadRequestException(tradingGuardErrors[0]);
     }
 
     const sym = signal.symbol;

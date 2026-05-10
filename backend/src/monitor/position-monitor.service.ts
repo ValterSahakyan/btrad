@@ -5,6 +5,7 @@ import { OrderExecutionService } from '../execution/order-execution.service';
 import { LogsService } from '../logs/logs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ScannerService } from '../scanner/scanner.service';
+import { applyWeekendOverrides } from '../settings/weekend-settings';
 import { TelegramService } from '../telegram/telegram.service';
 
 type LiveTradeWithOrders = Prisma.TradeGetPayload<{
@@ -273,7 +274,7 @@ export class PositionMonitorService implements OnModuleInit {
   }
 
   private async refillOpenSlots(): Promise<void> {
-    const settings = await this.prisma.botSettings.findFirst();
+    const settings = applyWeekendOverrides(await this.prisma.botSettings.findFirst());
     if (!settings) return;
     if (settings.isPaused) return;
     if (settings.mode !== 'live') return;
@@ -336,7 +337,7 @@ export class PositionMonitorService implements OnModuleInit {
   }
 
   private async ensureContinuousLiveFlow(): Promise<void> {
-    const settings = await this.prisma.botSettings.findFirst();
+    const settings = applyWeekendOverrides(await this.prisma.botSettings.findFirst());
     if (!settings) return;
     if (settings.isPaused) return;
     if (settings.mode !== 'live') return;

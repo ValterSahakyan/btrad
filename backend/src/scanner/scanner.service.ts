@@ -11,10 +11,19 @@ import { MarketRegimeService } from '../market-regime/market-regime.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RiskEngineService } from '../risk/risk-engine.service';
 import { ConfidenceScoreService } from '../scoring/confidence-score.service';
+import { applyWeekendOverrides, isWeekendUtc } from '../settings/weekend-settings';
+import { isTradingWindowOpen } from '../settings/trading-guard';
 import { StrategyConfig } from '../strategies/strategy.interface';
 import { StrategySelectorService } from '../strategies/strategy-selector.service';
 import { TelegramService } from '../telegram/telegram.service';
 import { HotScoreService } from './hot-score.service';
+
+type StrategyHealth = {
+  trades: number;
+  totalPnl: number;
+  consecutiveLosses: number;
+  blockedReason?: string;
+};
 
 @Injectable()
 export class ScannerService {
@@ -67,8 +76,15 @@ export class ScannerService {
   }
 
   private async _runScan(): Promise<{ processed: number; signalsCreated: number }> {
-    const settings = await this.prisma.botSettings.findFirst();
+    const baseSettings = await this.prisma.botSettings.findFirst();
+    const settings = applyWeekendOverrides(baseSettings);
     if (settings?.isPaused) {
+      return { processed: 0, signalsCreated: 0 };
+    }
+    if (!isTradingWindowOpen(settings)) {
+      await this.logsService.info('scanner', 'Skipped market scan outside configured trading window', {
+        weekendModeActive: Boolean((baseSettings as { weekendModeEnabled?: boolean } | null)?.weekendModeEnabled && isWeekendUtc()),
+      });
       return { processed: 0, signalsCreated: 0 };
     }
     await this.logsService.info('scanner', 'Starting market scan');
@@ -79,10 +95,12 @@ export class ScannerService {
       btcTrend: regime.btcTrend,
       ethTrend: regime.ethTrend,
       caution: regime.caution,
+      weekendModeActive: Boolean((baseSettings as { weekendModeEnabled?: boolean } | null)?.weekendModeEnabled && isWeekendUtc()),
     });
 
     const maxSymbols = settings?.maxSymbolsPerScan ?? 50;
     const minHotScore = settings?.minHotScoreForScan ?? 45;
+    const strategyHealth = await this.buildStrategyHealthMap();
 
     const [enabledSymbols, tickers] = await Promise.all([
       this.prisma.symbol.findMany({ where: { isEnabled: true } }),
@@ -105,6 +123,10 @@ export class ScannerService {
     let duplicateTradeSkipped = 0;
     let duplicateSignalSkipped = 0;
     const riskReasonCounts = new Map<string, number>();
+    const candidateStrategyCounts = new Map<string, number>();
+    const createdStrategyCounts = new Map<string, number>();
+    const createdDirectionCounts = new Map<string, number>();
+    const strategyBlockedCounts = new Map<string, number>();
 
     for (const { record: symbolRecord, ticker } of sorted) {
       try {
@@ -153,7 +175,7 @@ export class ScannerService {
 
         const strategyConfig = buildStrategyConfig(settings);
 
-        const candidate = this.strategySelectorService.evaluate({
+        const candidates = this.strategySelectorService.evaluateAll({
           symbol: symbolRecord.symbol,
           candles15m,
           candles1h,
@@ -164,64 +186,86 @@ export class ScannerService {
           strategyConfig,
         });
 
-        if (!candidate) {
+        if (candidates.length === 0) {
           noStrategyCandidate += 1;
           continue;
         }
+        let selected: {
+          candidate: (typeof candidates)[number];
+          confidenceScore: number;
+          risk: Awaited<ReturnType<RiskEngineService['validateSignal']>>;
+          expiresAt: Date;
+        } | null = null;
+        let hadUnblockedCandidate = false;
 
-        const provisionalConfidence = this.confidenceScoreService.calculate({
-          hotScore,
-          strategyScore: candidate.strategyScore,
-          marketScore: regime.score,
-          liquidityScore: Math.max(20, 100 - spread * 100),
-          riskScore: 75,
-        });
+        for (const candidate of candidates) {
+          candidateStrategyCounts.set(candidate.strategy, (candidateStrategyCounts.get(candidate.strategy) ?? 0) + 1);
 
-        const expiresAt = new Date(Date.now() + (settings?.signalExpirationMinutes ?? 15) * 60_000);
-        const risk = await this.riskEngineService.validateSignal({
-          symbol: symbolRecord.symbol,
-          direction: candidate.direction,
-          entryPrice: candidate.entryPrice,
-          stopLoss: candidate.stopLoss,
-          riskReward: candidate.riskReward,
-          spread,
-          confidenceScore: provisionalConfidence,
-          expiresAt,
-          marketRegime: regime.regime,
-          stepSize: symbolRecord.stepSize,
-          minNotional: symbolRecord.minNotional,
-        });
-
-        const confidenceScore = this.confidenceScoreService.calculate({
-          hotScore,
-          strategyScore: candidate.strategyScore,
-          marketScore: regime.score,
-          liquidityScore: Math.max(20, 100 - spread * 100),
-          riskScore: risk.riskScore,
-        });
-
-        const minConfidence = settings?.minConfidenceScore ?? 65;
-        if (!risk.allowed || confidenceScore < minConfidence) {
-          riskRejected += 1;
-          for (const reason of risk.messages) {
-            riskReasonCounts.set(reason, (riskReasonCounts.get(reason) ?? 0) + 1);
+          const health = strategyHealth.get(candidate.strategy);
+          if (health?.blockedReason) {
+            strategyBlockedCounts.set(candidate.strategy, (strategyBlockedCounts.get(candidate.strategy) ?? 0) + 1);
+            continue;
           }
-          if (confidenceScore < minConfidence) {
-            riskReasonCounts.set(
-              `Confidence below minimum (${confidenceScore.toFixed(1)} < ${minConfidence})`,
-              (riskReasonCounts.get(`Confidence below minimum (${confidenceScore.toFixed(1)} < ${minConfidence})`) ?? 0) + 1,
-            );
-          }
-          await this.logsService.warn('scanner', 'Signal skipped by filters', {
-            symbol: symbolRecord.symbol,
-            confidenceScore: Number(confidenceScore.toFixed(1)),
-            minConfidence,
-            riskAllowed: risk.allowed,
-            reasons: risk.messages,
-            regime: regime.regime,
+          hadUnblockedCandidate = true;
+
+          const provisionalConfidence = this.confidenceScoreService.calculate({
+            hotScore,
+            strategyScore: candidate.strategyScore,
+            marketScore: regime.score,
+            liquidityScore: Math.max(20, 100 - spread * 100),
+            riskScore: 75,
           });
+
+          const expiresAt = new Date(Date.now() + (settings?.signalExpirationMinutes ?? 15) * 60_000);
+          const risk = await this.riskEngineService.validateSignal({
+            symbol: symbolRecord.symbol,
+            direction: candidate.direction,
+            strategy: candidate.strategy,
+            entryPrice: candidate.entryPrice,
+            stopLoss: candidate.stopLoss,
+            riskReward: candidate.riskReward,
+            spread,
+            confidenceScore: provisionalConfidence,
+            expiresAt,
+            marketRegime: regime.regime,
+            stepSize: symbolRecord.stepSize,
+            minNotional: symbolRecord.minNotional,
+          });
+
+          const confidenceScore = this.confidenceScoreService.calculate({
+            hotScore,
+            strategyScore: candidate.strategyScore,
+            marketScore: regime.score,
+            liquidityScore: Math.max(20, 100 - spread * 100),
+            riskScore: risk.riskScore,
+          });
+
+          const minConfidence = effectiveMinConfidence(settings?.minConfidenceScore ?? 65, candidate.strategy);
+          if (!risk.allowed || confidenceScore < minConfidence) {
+            for (const reason of risk.messages) {
+              riskReasonCounts.set(reason, (riskReasonCounts.get(reason) ?? 0) + 1);
+            }
+            if (confidenceScore < minConfidence) {
+              const key = `Confidence below minimum for ${candidate.strategy} (${confidenceScore.toFixed(1)} < ${minConfidence})`;
+              riskReasonCounts.set(key, (riskReasonCounts.get(key) ?? 0) + 1);
+            }
+            continue;
+          }
+
+          selected = { candidate, confidenceScore, risk, expiresAt };
+          break;
+        }
+
+        if (!selected) {
+          if (hadUnblockedCandidate) {
+            riskRejected += 1;
+          } else {
+            noStrategyCandidate += 1;
+          }
           continue;
         }
+
+        const { candidate, confidenceScore, risk, expiresAt } = selected;
 
         // Skip if already have an open trade for this symbol
         const existingTrade = await this.prisma.trade.findFirst({
@@ -264,6 +308,9 @@ export class ScannerService {
               reasons: candidate.reasonList,
               regime: regime as unknown as Prisma.InputJsonValue,
               spread,
+              meta: {
+                botVersionTag: getBotVersionTag(),
+              },
             } as unknown as Prisma.InputJsonValue,
             invalidationJson: {
               rules: candidate.invalidationRules,
@@ -275,6 +322,8 @@ export class ScannerService {
         });
 
         signalsCreated += 1;
+        createdStrategyCounts.set(candidate.strategy, (createdStrategyCounts.get(candidate.strategy) ?? 0) + 1);
+        createdDirectionCounts.set(candidate.direction, (createdDirectionCounts.get(candidate.direction) ?? 0) + 1);
 
         const autoExecute = settings?.requireDashboardConfirmation === false;
 
@@ -326,6 +375,24 @@ export class ScannerService {
       riskRejected,
       duplicateTradeSkipped,
       duplicateSignalSkipped,
+      strategyHealth: Object.fromEntries(
+        [...strategyHealth.entries()].map(([strategy, health]) => [strategy, {
+          trades: health.trades,
+          totalPnl: Number(health.totalPnl.toFixed(4)),
+          consecutiveLosses: health.consecutiveLosses,
+          blockedReason: health.blockedReason ?? null,
+        }]),
+      ),
+      strategyBlockedCounts: Object.fromEntries(strategyBlockedCounts),
+      candidateStrategyCounts: Object.fromEntries(candidateStrategyCounts),
+      createdStrategyCounts: Object.fromEntries(createdStrategyCounts),
+      createdDirectionCounts: Object.fromEntries(createdDirectionCounts),
+      executionMode:
+        settings?.requireDashboardConfirmation === false
+          ? 'live_auto'
+          : settings?.realTradingEnabled && settings?.mode === 'live'
+            ? 'live_manual'
+            : 'signal_only',
       topBlockers,
     });
     return { processed, signalsCreated };
@@ -363,6 +430,74 @@ export class ScannerService {
 
     return { imported };
   }
+
+  private async buildStrategyHealthMap(): Promise<Map<string, StrategyHealth>> {
+    const todayStart = new Date();
+    todayStart.setUTCHours(0, 0, 0, 0);
+
+    const trades = await this.prisma.trade.findMany({
+      where: {
+        closedAt: { gte: todayStart },
+        pnl: { not: null },
+        signal: { isNot: null },
+      },
+      select: {
+        pnl: true,
+        closedAt: true,
+        signal: {
+          select: {
+            strategy: true,
+          },
+        },
+      },
+      orderBy: { closedAt: 'desc' },
+    });
+
+    const grouped = new Map<string, Array<{ pnl: number }>>();
+    for (const trade of trades) {
+      const strategy = trade.signal?.strategy;
+      if (!strategy || trade.pnl === null) continue;
+      const bucket = grouped.get(strategy) ?? [];
+      bucket.push({ pnl: trade.pnl });
+      grouped.set(strategy, bucket);
+    }
+
+    const healthMap = new Map<string, StrategyHealth>();
+    for (const [strategy, bucket] of grouped.entries()) {
+      const totalPnl = bucket.reduce((sum, trade) => sum + trade.pnl, 0);
+      const consecutiveLosses = bucket.findIndex((trade) => trade.pnl > 0);
+      const effectiveConsecutiveLosses = consecutiveLosses === -1 ? bucket.length : consecutiveLosses;
+      let blockedReason: string | undefined;
+
+      if (effectiveConsecutiveLosses >= 4) {
+        blockedReason = '4 consecutive losses today';
+      } else if (bucket.length >= 6 && totalPnl < -0.75) {
+        blockedReason = 'daily strategy drawdown exceeded';
+      }
+
+      healthMap.set(strategy, {
+        trades: bucket.length,
+        totalPnl,
+        consecutiveLosses: effectiveConsecutiveLosses,
+        blockedReason,
+      });
+    }
+
+    return healthMap;
+  }
+}
+
+function effectiveMinConfidence(base: number, strategy: string): number {
+  if (strategy === 'pullback_continuation') return Math.max(base, 82);
+  if (strategy === 'mean_reversion') return Math.max(base, 85);
+  if (strategy === 'range_bounce') return Math.max(base, 80);
+  if (strategy === 'trend_reclaim') return Math.max(base, 78);
+  return base;
+}
+
+function getBotVersionTag(): string {
+  const tag = process.env.BOT_VERSION_TAG?.trim();
+  return tag && tag.length > 0 ? tag : 'current';
 }
 
 function randomToken(): string {

@@ -5,6 +5,7 @@ import { atr } from '../indicators/atr';
 import { ema } from '../indicators/ema';
 import { rsi } from '../indicators/rsi';
 import { detectTrend } from '../indicators/trend';
+import { volumeAverage, volumeSpike } from '../indicators/volume';
 import { StrategyContext, TradingStrategy } from './strategy.interface';
 
 @Injectable()
@@ -38,6 +39,9 @@ export class PullbackContinuationStrategy implements TradingStrategy {
     const currentRsi = rsi(closes15m, 14).at(-1) ?? 50;
     const ema20_1h = ema(closes1h, 20).at(-1) ?? currentPrice;
     const ema50_1h = ema(closes1h, 50).at(-1) ?? currentPrice;
+    const volumes15m = candles15m.map((c) => c.volume);
+    const avgVolume = volumeAverage(volumes15m, 20);
+    const volumeRatio = volumeSpike(volumes15m.at(-1) ?? 0, avgVolume);
 
     if (atr14 <= 0) return null;
     if (context.hotScore < cfg.minHotScore || context.spread > 0.5) return null;
@@ -70,12 +74,13 @@ export class PullbackContinuationStrategy implements TradingStrategy {
       pullbackDistance >= atr14 * 0.05 &&
       pullbackDistance <= cfg.atrMultiplier * atr14 * 0.85 &&
       recentPullbackLow <= ema20 + atr14 * 0.2 &&
-      trendStrengthAtr >= 0.18 &&
+      trendStrengthAtr >= 0.24 &&
       currentPrice > ema50 &&
       currentPrice >= ema20 &&
       lastCandle.close > lastCandle.open &&
       lastCandle.close >= prevCandle.close &&
-      candleBodyRatio >= 0.45 &&
+      candleBodyRatio >= 0.5 &&
+      volumeRatio >= 0.9 &&
       context.marketRegime.regime !== 'bearish' &&
       context.marketRegime.regime !== 'no_trade'
     ) {
@@ -110,6 +115,7 @@ export class PullbackContinuationStrategy implements TradingStrategy {
           `Pullback tagged 15m EMA20 (${ema20.toFixed(4)}) and reclaimed with a strong close`,
           `RSI ${currentRsi.toFixed(1)} stayed in the continuation pocket after the dip`,
           `15m trend strength ${trendStrengthAtr.toFixed(2)} ATR with candle body ratio ${candleBodyRatio.toFixed(2)}`,
+          `Participation confirmed with ${volumeRatio.toFixed(1)}x relative volume on reclaim`,
         ],
         invalidationRules: ['15m close back below EMA20', '1h EMA20 loses EMA50', `RSI drops below ${cfg.rsiLongMin - 3}`],
       };
@@ -124,12 +130,13 @@ export class PullbackContinuationStrategy implements TradingStrategy {
       pullbackDistance >= atr14 * 0.05 &&
       pullbackDistance <= cfg.atrMultiplier * atr14 * 0.85 &&
       recentPullbackHigh >= ema20 - atr14 * 0.2 &&
-      trendStrengthAtr >= 0.18 &&
+      trendStrengthAtr >= 0.24 &&
       currentPrice < ema50 &&
       currentPrice <= ema20 &&
       lastCandle.close < lastCandle.open &&
       lastCandle.close <= prevCandle.close &&
-      candleBodyRatio >= 0.45 &&
+      candleBodyRatio >= 0.5 &&
+      volumeRatio >= 0.9 &&
       context.marketRegime.regime !== 'bullish' &&
       context.marketRegime.regime !== 'no_trade'
     ) {
@@ -164,6 +171,7 @@ export class PullbackContinuationStrategy implements TradingStrategy {
           `Pullback tagged 15m EMA20 (${ema20.toFixed(4)}) and rejected with a strong close`,
           `RSI ${currentRsi.toFixed(1)} stayed in the continuation pocket after the bounce`,
           `15m trend strength ${trendStrengthAtr.toFixed(2)} ATR with candle body ratio ${candleBodyRatio.toFixed(2)}`,
+          `Participation confirmed with ${volumeRatio.toFixed(1)}x relative volume on rejection`,
         ],
         invalidationRules: ['15m close back above EMA20', '1h EMA20 reclaims EMA50', `RSI breaks above ${cfg.rsiShortMax + 3}`],
       };

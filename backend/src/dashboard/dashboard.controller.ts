@@ -20,9 +20,35 @@ type TradePnlRow = {
   pnl: number | null;
 };
 
-type SignalWithTradesRow = {
-  strategy: string;
-  trades: TradePnlRow[];
+type TradePerformanceRow = {
+  symbol: string;
+  pnl: number | null;
+  signal: {
+    strategy: string;
+  } | null;
+};
+
+type PerformanceBucket = {
+  count: number;
+  pnl: number;
+  winRate: number;
+};
+
+type TradeAnalyticsRow = {
+  symbol: string;
+  direction: string;
+  entryPrice: number;
+  exitPrice: number | null;
+  quantity: number;
+  pnl: number | null;
+  openedAt: Date | null;
+  closedAt: Date | null;
+  signal: {
+    strategy: string;
+    entryPrice: number;
+    createdAt: Date;
+    reasonJson: unknown;
+  } | null;
 };
 
 @Controller('/api')
@@ -140,6 +166,22 @@ export class DashboardController {
       minHotScoreForScan: 60,
       minConfidenceScore: 78,
       minRiskReward: 1.3,
+      weekendModeEnabled: true,
+      weekendMaxOpenTrades: 8,
+      weekendMinConfidenceScore: 82,
+      weekendMinHotScoreForScan: 65,
+      weekendRiskPerTradePercent: 0.5,
+      weekendMaxPositionUsd: 3,
+      sessionModeEnabled: true,
+      tradingWindowStartHourUtc: 6,
+      tradingWindowEndHourUtc: 22,
+      maxLongOpenTrades: 5,
+      maxShortOpenTrades: 3,
+      breakoutMaxOpenTrades: 4,
+      pullbackMaxOpenTrades: 2,
+      reversionMaxOpenTrades: 0,
+      trendReclaimMaxOpenTrades: 3,
+      rangeBounceMaxOpenTrades: 2,
       breakoutEnabled: true,
       breakoutMinVolumeRatio: 1.8,
       breakoutLookbackPeriod: 20,
@@ -161,6 +203,22 @@ export class DashboardController {
       reversionVwapDeviationPct: 2.5,
       reversionVolumeDeclineRatio: 0.5,
       reversionMaxSlPercent: 3,
+      trendReclaimEnabled: true,
+      trendReclaimEmaBufferAtr: 0.3,
+      trendReclaimVolumeRatio: 1.2,
+      trendReclaimMaxSlPercent: 3,
+      trendReclaimTp1Multiplier: 1.3,
+      trendReclaimTp2Multiplier: 2.0,
+      trendReclaimMinHotScore: 58,
+      rangeBounceEnabled: true,
+      rangeBounceLookbackPeriod: 24,
+      rangeBounceProximityAtr: 0.7,
+      rangeBounceRsiLongMax: 43,
+      rangeBounceRsiShortMin: 57,
+      rangeBounceMaxSlPercent: 2.8,
+      rangeBounceTp1Multiplier: 1.2,
+      rangeBounceTp2Multiplier: 1.8,
+      rangeBounceMinHotScore: 45,
     };
 
     validateSettingsConsistency(preset);
@@ -327,34 +385,62 @@ export class DashboardController {
 
   @Get('/performance/strategies')
   async performanceStrategies() {
-    const signals: SignalWithTradesRow[] = await this.prisma.signal.findMany({
+    const trades: TradePerformanceRow[] = await this.prisma.trade.findMany({
+      where: { pnl: { not: null } },
       select: {
-        strategy: true,
-        trades: {
-          select: { symbol: true, pnl: true },
+        symbol: true,
+        pnl: true,
+        signal: {
+          select: {
+            strategy: true,
+          },
         },
       },
     });
-    return signals.reduce<Record<string, { count: number; pnl: number }>>((accumulator, signal) => {
-      const pnl = signal.trades.reduce((sum, trade) => sum + (trade.pnl ?? 0), 0);
-      accumulator[signal.strategy] = accumulator[signal.strategy] ?? { count: 0, pnl: 0 };
-      accumulator[signal.strategy].count += 1;
-      accumulator[signal.strategy].pnl += pnl;
-      return accumulator;
-    }, {});
+    return aggregatePerformance(
+      trades,
+      (trade) => trade.signal?.strategy ?? 'unknown',
+    );
   }
 
   @Get('/performance/symbols')
   async performanceSymbols() {
     const trades: TradePnlRow[] = await this.prisma.trade.findMany({
+      where: { pnl: { not: null } },
       select: { symbol: true, pnl: true },
     });
-    return trades.reduce<Record<string, { count: number; pnl: number }>>((accumulator, trade) => {
-      accumulator[trade.symbol] = accumulator[trade.symbol] ?? { count: 0, pnl: 0 };
-      accumulator[trade.symbol].count += 1;
-      accumulator[trade.symbol].pnl += trade.pnl ?? 0;
-      return accumulator;
-    }, {});
+    return aggregatePerformance(trades, (trade) => trade.symbol);
+  }
+
+  @Get('/performance/analytics')
+  async performanceAnalytics() {
+    const trades: TradeAnalyticsRow[] = await this.prisma.trade.findMany({
+      where: {
+        pnl: { not: null },
+        signal: { isNot: null },
+      },
+      orderBy: { closedAt: 'asc' },
+      select: {
+        symbol: true,
+        direction: true,
+        entryPrice: true,
+        exitPrice: true,
+        quantity: true,
+        pnl: true,
+        openedAt: true,
+        closedAt: true,
+        signal: {
+          select: {
+            strategy: true,
+            entryPrice: true,
+            createdAt: true,
+            reasonJson: true,
+          },
+        },
+      },
+    });
+
+    return buildAnalyticsReport(trades);
   }
 
   @Get('/logs')
@@ -384,6 +470,22 @@ export class DashboardController {
       'maxConsecutiveLosses',
       'minPositionUsd',
       'maxPositionUsd',
+      'weekendModeEnabled',
+      'weekendMaxOpenTrades',
+      'weekendMinConfidenceScore',
+      'weekendMinHotScoreForScan',
+      'weekendRiskPerTradePercent',
+      'weekendMaxPositionUsd',
+      'sessionModeEnabled',
+      'tradingWindowStartHourUtc',
+      'tradingWindowEndHourUtc',
+      'maxLongOpenTrades',
+      'maxShortOpenTrades',
+      'breakoutMaxOpenTrades',
+      'pullbackMaxOpenTrades',
+      'reversionMaxOpenTrades',
+      'trendReclaimMaxOpenTrades',
+      'rangeBounceMaxOpenTrades',
       'requireDashboardConfirmation',
       'allowAutoLiveExecution',
     ];
@@ -395,6 +497,173 @@ export class DashboardController {
       );
     }
   }
+}
+
+function aggregatePerformance<T extends { pnl: number | null }>(
+  trades: T[],
+  getKey: (trade: T) => string,
+): Record<string, PerformanceBucket> {
+  const buckets = new Map<string, { count: number; pnl: number; wins: number }>();
+
+  for (const trade of trades) {
+    const key = getKey(trade);
+    const bucket = buckets.get(key) ?? { count: 0, pnl: 0, wins: 0 };
+    const pnl = trade.pnl ?? 0;
+
+    bucket.count += 1;
+    bucket.pnl += pnl;
+    if (pnl > 0) bucket.wins += 1;
+
+    buckets.set(key, bucket);
+  }
+
+  return Object.fromEntries(
+    [...buckets.entries()].map(([key, bucket]) => [
+      key,
+      {
+        count: bucket.count,
+        pnl: bucket.pnl,
+        winRate: bucket.count === 0 ? 0 : (bucket.wins / bucket.count) * 100,
+      },
+    ]),
+  );
+}
+
+function buildAnalyticsReport(trades: TradeAnalyticsRow[]) {
+  const feeBps = readBpsEnv('ESTIMATED_TAKER_FEE_BPS', 4);
+  const slippageBps = readBpsEnv('ESTIMATED_SLIPPAGE_BPS', 3);
+
+  const rows = trades
+    .filter((trade): trade is TradeAnalyticsRow & { pnl: number; signal: NonNullable<TradeAnalyticsRow['signal']> } =>
+      trade.pnl !== null && trade.signal !== null,
+    )
+    .map((trade) => toAnalyticsRow(trade, feeBps, slippageBps));
+
+  return {
+    assumptions: {
+      estimatedTakerFeeBps: feeBps,
+      estimatedSlippageBps: slippageBps,
+      totalClosedTrades: rows.length,
+    },
+    overall: summarizeAnalytics(rows),
+    byStrategy: summarizeBy(rows, (row) => row.strategy),
+    byVersion: summarizeBy(rows, (row) => row.versionTag),
+    bySide: summarizeBy(rows, (row) => row.direction),
+    bySession: summarizeBy(rows, (row) => row.isWeekend ? 'weekend' : 'weekday'),
+  };
+}
+
+function summarizeBy<T extends AnalyticsTradeRow>(rows: T[], getKey: (row: T) => string) {
+  const buckets = new Map<string, T[]>();
+  for (const row of rows) {
+    const key = getKey(row);
+    const bucket = buckets.get(key) ?? [];
+    bucket.push(row);
+    buckets.set(key, bucket);
+  }
+
+  return Object.fromEntries(
+    [...buckets.entries()]
+      .sort((a, b) => b[1].length - a[1].length)
+      .map(([key, bucket]) => [key, summarizeAnalytics(bucket)]),
+  );
+}
+
+type AnalyticsTradeRow = {
+  symbol: string;
+  strategy: string;
+  direction: string;
+  versionTag: string;
+  isWeekend: boolean;
+  grossPnl: number;
+  netPnl: number;
+  estimatedCost: number;
+  entrySlippageBps: number;
+  fillDelaySec: number;
+};
+
+function summarizeAnalytics(rows: AnalyticsTradeRow[]) {
+  const count = rows.length;
+  const winsGross = rows.filter((row) => row.grossPnl > 0);
+  const lossesGross = rows.filter((row) => row.grossPnl < 0);
+  const winsNet = rows.filter((row) => row.netPnl > 0);
+  const lossesNet = rows.filter((row) => row.netPnl < 0);
+  const grossPnl = rows.reduce((sum, row) => sum + row.grossPnl, 0);
+  const netPnl = rows.reduce((sum, row) => sum + row.netPnl, 0);
+  const grossWins = winsGross.reduce((sum, row) => sum + row.grossPnl, 0);
+  const grossLosses = lossesGross.reduce((sum, row) => sum + Math.abs(row.grossPnl), 0);
+  const netWins = winsNet.reduce((sum, row) => sum + row.netPnl, 0);
+  const netLosses = lossesNet.reduce((sum, row) => sum + Math.abs(row.netPnl), 0);
+  const estimatedCost = rows.reduce((sum, row) => sum + row.estimatedCost, 0);
+
+  return {
+    trades: count,
+    grossPnl: round4(grossPnl),
+    netPnl: round4(netPnl),
+    grossExpectancy: count === 0 ? 0 : round4(grossPnl / count),
+    netExpectancy: count === 0 ? 0 : round4(netPnl / count),
+    grossWinRate: count === 0 ? 0 : round2((winsGross.length / count) * 100),
+    netWinRate: count === 0 ? 0 : round2((winsNet.length / count) * 100),
+    grossProfitFactor: grossLosses === 0 ? round4(grossWins) : round4(grossWins / grossLosses),
+    netProfitFactor: netLosses === 0 ? round4(netWins) : round4(netWins / netLosses),
+    avgEstimatedCost: count === 0 ? 0 : round4(estimatedCost / count),
+    totalEstimatedCost: round4(estimatedCost),
+    avgEntrySlippageBps: count === 0 ? 0 : round2(rows.reduce((sum, row) => sum + row.entrySlippageBps, 0) / count),
+    avgFillDelaySec: count === 0 ? 0 : round2(rows.reduce((sum, row) => sum + row.fillDelaySec, 0) / count),
+  };
+}
+
+function toAnalyticsRow(trade: TradeAnalyticsRow & { pnl: number; signal: NonNullable<TradeAnalyticsRow['signal']> }, feeBps: number, slippageBps: number): AnalyticsTradeRow {
+  const entryNotional = Math.abs(trade.entryPrice * trade.quantity);
+  const exitNotional = Math.abs((trade.exitPrice ?? trade.entryPrice) * trade.quantity);
+  const estimatedCost = ((entryNotional + exitNotional) * (feeBps + slippageBps)) / 10_000;
+  const signalEntry = trade.signal.entryPrice || trade.entryPrice;
+  const entrySlippageBps = signalEntry === 0 ? 0 : Math.abs(((trade.entryPrice - signalEntry) / signalEntry) * 10_000);
+  const fillDelaySec =
+    trade.openedAt && trade.signal.createdAt
+      ? Math.max(0, (trade.openedAt.getTime() - trade.signal.createdAt.getTime()) / 1000)
+      : 0;
+  const closedAt = trade.closedAt ?? trade.openedAt ?? trade.signal.createdAt;
+  const versionTag = readVersionTag(trade.signal.reasonJson);
+
+  return {
+    symbol: trade.symbol,
+    strategy: trade.signal.strategy,
+    direction: trade.direction,
+    versionTag,
+    isWeekend: isWeekendUtcDate(closedAt),
+    grossPnl: trade.pnl,
+    netPnl: trade.pnl - estimatedCost,
+    estimatedCost,
+    entrySlippageBps,
+    fillDelaySec,
+  };
+}
+
+function readVersionTag(value: unknown): string {
+  const meta = (value as { meta?: { botVersionTag?: string } } | null)?.meta;
+  const tag = meta?.botVersionTag?.trim();
+  return tag && tag.length > 0 ? tag : 'unknown';
+}
+
+function isWeekendUtcDate(value: Date): boolean {
+  const day = value.getUTCDay();
+  return day === 0 || day === 6;
+}
+
+function readBpsEnv(key: string, fallback: number): number {
+  const raw = process.env[key];
+  if (!raw) return fallback;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function round2(value: number): number {
+  return Number(value.toFixed(2));
+}
+
+function round4(value: number): number {
+  return Number(value.toFixed(4));
 }
 
 function validateSettingsConsistency(body: UpdateSettingsDto): void {
@@ -428,6 +697,22 @@ function validateSettingsConsistency(body: UpdateSettingsDto): void {
     body.pullbackRsiShortMin > body.pullbackRsiShortMax
   ) {
     throw new BadRequestException('Pullback short RSI min must be less than or equal to max');
+  }
+
+  if (
+    body.maxOpenTrades !== undefined &&
+    body.maxLongOpenTrades !== undefined &&
+    body.maxLongOpenTrades > body.maxOpenTrades
+  ) {
+    throw new BadRequestException('Max LONG open trades cannot exceed maxOpenTrades');
+  }
+
+  if (
+    body.maxOpenTrades !== undefined &&
+    body.maxShortOpenTrades !== undefined &&
+    body.maxShortOpenTrades > body.maxOpenTrades
+  ) {
+    throw new BadRequestException('Max SHORT open trades cannot exceed maxOpenTrades');
   }
 }
 
