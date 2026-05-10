@@ -42,6 +42,7 @@ export class OrderExecutionService {
     const revertToActive = () =>
       this.prisma.signal.update({ where: { id: signalId }, data: { status: 'active' } }).catch(() => null);
 
+    try {
     if (signal.expiresAt < new Date()) {
       await this.prisma.signal.update({ where: { id: signalId }, data: { status: 'expired' } });
       throw new BadRequestException('Signal has expired');
@@ -350,5 +351,31 @@ export class OrderExecutionService {
       .catch(() => null);
 
     return trade;
+    } catch (err) {
+      const current = await this.prisma.signal.findUnique({
+        where: { id: signalId },
+        select: { status: true },
+      });
+      if (current?.status === 'approved') {
+        await this.prisma.signal.update({
+          where: { id: signalId },
+          data: { status: shouldMarkSignalFailed(err) ? 'failed' : 'active' },
+        });
+      }
+      throw err;
+    }
   }
+}
+
+function shouldMarkSignalFailed(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return [
+    'Please sign TradFi-Perps agreement contract fapi.',
+    'API-key format invalid',
+    'Position size is zero after step-size rounding',
+    'Position size below Binance minimum notional',
+    'Signal has expired',
+    'Signal is stale',
+    'SL order failed',
+  ].some((text) => message.includes(text));
 }

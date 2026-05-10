@@ -716,7 +716,7 @@ function normalizeSettingsUpdate(body: UpdateSettingsDto): UpdateSettingsDto {
 
 function serializeSettings<T extends { realTradingEnabled: boolean; requireDashboardConfirmation: boolean }>(settings: T) {
   const {
-    isPaused: _ignored,
+    isPaused,
     weekendModeEnabled: _weekendModeEnabled,
     weekendMaxOpenTrades: _weekendMaxOpenTrades,
     weekendMinConfidenceScore: _weekendMinConfidenceScore,
@@ -755,6 +755,7 @@ function serializeSettings<T extends { realTradingEnabled: boolean; requireDashb
   };
   return {
     ...rest,
+    isPaused: isPaused ?? false,
     enableRealTrading: rest.realTradingEnabled,
     allowAutoLiveExecution: rest.requireDashboardConfirmation === false,
   };
