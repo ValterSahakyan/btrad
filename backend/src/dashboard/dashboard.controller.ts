@@ -65,15 +65,22 @@ export class DashboardController {
   @Get('/status')
   async getStatus() {
     const settings = await this.prisma.botSettings.findFirst();
-    const activeSignals = await this.prisma.signal.count({
-      where: { status: { in: ['active', 'pending', 'approved', 'live_executed'] } },
+    const queuedSignals = await this.prisma.signal.count({
+      where: { status: { in: ['active', 'pending', 'approved'] } },
     });
-    const dbOpenTrades = await this.prisma.trade.count({ where: { status: 'live_open' } });
+    const executedSignals = await this.prisma.signal.count({
+      where: { status: 'live_executed' },
+    });
+    const dbOpenTradeRows = await this.prisma.trade.findMany({
+      where: { status: 'live_open' },
+      select: { symbol: true },
+    });
+    const dbOpenTrades = new Set(dbOpenTradeRows.map((trade) => trade.symbol)).size;
     let exchangeOpenTrades = dbOpenTrades;
     if (settings?.mode === 'live' && this.binanceService.hasApiKeys()) {
       try {
         const positions = await this.binanceService.fetchOpenPositions();
-        exchangeOpenTrades = positions.length;
+        exchangeOpenTrades = new Set(positions.map((position) => position.symbol)).size;
       } catch {
         exchangeOpenTrades = dbOpenTrades;
       }
@@ -92,7 +99,9 @@ export class DashboardController {
       requireDashboardConfirmation: settings?.requireDashboardConfirmation ?? true,
       allowAutoLiveExecution: settings?.requireDashboardConfirmation === false,
       executionMode,
-      activeSignals,
+      activeSignals: queuedSignals,
+      queuedSignals,
+      executedSignals,
       openTrades,
       dbOpenTrades,
       exchangeOpenTrades,

@@ -12,6 +12,9 @@ const API = '/api/backend';
 const REFRESH_MS = 10_000;
 const PAGE_SIZE = 100;
 type SortKey =
+  | 'createdAt'
+  | 'openedAt'
+  | 'closedAt'
   | 'symbol'
   | 'direction'
   | 'entryPrice'
@@ -72,7 +75,7 @@ export default function TradesPage() {
   const [closingId, setClosingId] = useState<string | null>(null);
   const [clearing, setClearing] = useState(false);
   const [page, setPage] = useState(1);
-  const [sort, setSort] = useState<SortState>({ key: 'pnl', direction: 'desc' });
+  const [sort, setSort] = useState<SortState>({ key: 'createdAt', direction: 'desc' });
   const { confirm, modal } = useConfirm();
 
   const fetchTrades = useCallback(async () => {
@@ -219,6 +222,9 @@ export default function TradesPage() {
               <table className="t-table">
                 <thead>
                   <tr>
+                    <th>{renderHeader('Created UTC', 'createdAt')}</th>
+                    <th>{renderHeader('Opened UTC', 'openedAt')}</th>
+                    <th>{renderHeader('Closed UTC', 'closedAt')}</th>
                     <th>{renderHeader('Symbol', 'symbol')}</th>
                     <th>{renderHeader('Dir', 'direction')}</th>
                     <th>{renderHeader('Entry', 'entryPrice')}</th>
@@ -242,6 +248,9 @@ export default function TradesPage() {
                         key={t.id}
                         className={cn(isLive && 'row-live')}
                       >
+                        <td className="font-mono text-[11px] text-dim">{formatUtc(t.createdAt)}</td>
+                        <td className="font-mono text-[11px] text-dim">{formatUtc(t.openedAt)}</td>
+                        <td className="font-mono text-[11px] text-dim">{formatUtc(t.closedAt)}</td>
                         <td className="font-mono font-semibold text-[12px]">{t.symbol}</td>
                         <td>{dir(t.direction)}</td>
                         <td className="font-mono text-[12px]">{number(t.entryPrice, 4)}</td>
@@ -313,6 +322,12 @@ function getTradeSortValue(trade: any, key: SortKey): string | number {
   const size = (trade.quantity ?? 0) * (sizePrice ?? 0);
 
   switch (key) {
+    case 'createdAt':
+      return parseDateValue(trade.createdAt);
+    case 'openedAt':
+      return parseDateValue(trade.openedAt);
+    case 'closedAt':
+      return parseDateValue(trade.closedAt);
     case 'symbol':
       return trade.symbol ?? '';
     case 'direction':
@@ -338,4 +353,17 @@ function getTradeSortValue(trade: any, key: SortKey): string | number {
     default:
       return 0;
   }
+}
+
+function parseDateValue(value: string | null | undefined): number {
+  if (!value) return 0;
+  const ts = Date.parse(value);
+  return Number.isNaN(ts) ? 0 : ts;
+}
+
+function formatUtc(value: string | null | undefined): string {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toISOString().replace('T', ' ').slice(0, 16);
 }

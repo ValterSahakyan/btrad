@@ -1,15 +1,15 @@
 {
-  "/api/backend/[...path]/route": "app/api/backend/[...path]/route.js",
   "/api/auth/clear/route": "app/api/auth/clear/route.js",
+  "/api/backend/[...path]/route": "app/api/backend/[...path]/route.js",
   "/icon.svg/route": "app/icon.svg/route.js",
   "/_not-found/page": "app/_not-found/page.js",
+  "/logs/page": "app/logs/page.js",
   "/hot-coins/page": "app/hot-coins/page.js",
+  "/performance/page": "app/performance/page.js",
   "/login/page": "app/login/page.js",
   "/overview/page": "app/overview/page.js",
-  "/logs/page": "app/logs/page.js",
-  "/page": "app/page.js",
   "/settings/page": "app/settings/page.js",
+  "/page": "app/page.js",
   "/trades/page": "app/trades/page.js",
-  "/signals/page": "app/signals/page.js",
-  "/performance/page": "app/performance/page.js"
+  "/signals/page": "app/signals/page.js"
 }

@@ -16,7 +16,6 @@ export class TradesService {
     const trades = await this.prisma.trade.findMany({
       include: { signal: true, orders: true },
       orderBy: { createdAt: 'desc' },
-      take: 200,
     });
 
     try {

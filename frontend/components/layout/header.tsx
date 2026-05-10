@@ -1,5 +1,8 @@
-import { fetchApiSafe } from '@/services/api';
-import { headers } from 'next/headers';
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
+import { clientApiPath } from '@/lib/client-api';
 
 type Status = {
   mode: string;
@@ -7,16 +10,19 @@ type Status = {
   requireDashboardConfirmation: boolean;
   botStatus: string;
   activeSignals: number;
+  queuedSignals?: number;
   openTrades: number;
 };
 
+const REFRESH_MS = 10_000;
+
 function Pill({ label, tone }: { label: string; tone: 'pos' | 'neg' | 'warn' | 'dim' | 'acc' }) {
   const styles = {
-    pos:  'bg-positive/10 text-positive border-positive/20',
-    neg:  'bg-danger/10 text-danger border-danger/20',
+    pos: 'bg-positive/10 text-positive border-positive/20',
+    neg: 'bg-danger/10 text-danger border-danger/20',
     warn: 'bg-warning/10 text-warning border-warning/20',
-    dim:  'bg-white/5 text-muted border-white/10',
-    acc:  'bg-accent/10 text-accent border-accent/20',
+    dim: 'bg-white/5 text-muted border-white/10',
+    acc: 'bg-accent/10 text-accent border-accent/20',
   };
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border ${styles[tone]}`}>
@@ -25,22 +31,43 @@ function Pill({ label, tone }: { label: string; tone: 'pos' | 'neg' | 'warn' | '
   );
 }
 
-export async function Topbar() {
-  const reqHeaders = await headers();
-  const pathname = reqHeaders.get('x-pathname') ?? '';
+const pageTitle: Record<string, string> = {
+  '/overview': 'Overview',
+  '/hot-coins': 'Scanner',
+  '/signals': 'Signals',
+  '/trades': 'Trades',
+  '/performance': 'Performance',
+  '/settings': 'Settings',
+  '/logs': 'Logs',
+};
 
-  const pageTitle: Record<string, string> = {
-    '/overview': 'Overview',
-    '/hot-coins': 'Scanner',
-    '/signals': 'Signals',
-    '/trades': 'Trades',
-    '/performance': 'Performance',
-    '/settings': 'Settings',
-    '/logs': 'Logs',
-  };
+export function Topbar() {
+  const pathname = usePathname();
   const title = pageTitle[pathname] ?? 'Dashboard';
+  const [status, setStatus] = useState<Status | null>(null);
 
-  const status = await fetchApiSafe<Status | null>('/status', null);
+  const fetchStatus = useCallback(async () => {
+    try {
+      const response = await fetch(clientApiPath('/status'), {
+        credentials: 'include',
+        cache: 'no-store',
+      });
+      if (!response.ok) {
+        setStatus(null);
+        return;
+      }
+      setStatus(await response.json());
+    } catch {
+      setStatus(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStatus();
+    const intervalId = window.setInterval(fetchStatus, REFRESH_MS);
+    return () => window.clearInterval(intervalId);
+  }, [fetchStatus]);
+
   const isStopped = status?.botStatus === 'paused';
   const liveMode = status?.mode === 'live';
   const realOn = status?.realTradingEnabled ?? false;
@@ -56,7 +83,7 @@ export async function Topbar() {
         <>
           {status.activeSignals > 0 && (
             <span className="text-[11px] text-muted">
-              <span className="text-warning font-mono">{status.activeSignals}</span> signals
+              <span className="text-warning font-mono">{status.activeSignals}</span> queued
             </span>
           )}
           {status.openTrades > 0 && (
