@@ -488,10 +488,6 @@ export class ScannerService {
 }
 
 function effectiveMinConfidence(base: number, strategy: string): number {
-  if (strategy === 'pullback_continuation') return Math.max(base, 82);
-  if (strategy === 'mean_reversion') return Math.max(base, 85);
-  if (strategy === 'range_bounce') return Math.max(base, 80);
-  if (strategy === 'trend_reclaim') return Math.max(base, 78);
   return base;
 }
 
