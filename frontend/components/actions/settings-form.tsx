@@ -81,7 +81,7 @@ type SettingsState = {
   rangeBounceMinHotScore: number;
 };
 
-type Field = { key: keyof SettingsState; label: string; unit?: string };
+type Field = { key: keyof SettingsState; label: string; unit?: string; min?: number; max?: number };
 type Section = { title: string; description?: string; fields: Field[] };
 
 const SECTIONS: Section[] = [
@@ -169,7 +169,7 @@ const SECTIONS: Section[] = [
       { key: 'pullbackRsiLongMax',      label: 'RSI Long Max' },
       { key: 'pullbackRsiShortMin',     label: 'RSI Short Min' },
       { key: 'pullbackRsiShortMax',     label: 'RSI Short Max' },
-      { key: 'pullbackAtrMultiplier',   label: 'ATR Zone',          unit: 'x ATR' },
+      { key: 'pullbackAtrMultiplier',   label: 'ATR Zone',          unit: 'x ATR', min: 0.1, max: 10 },
       { key: 'pullbackMaxSlPercent',    label: 'Max SL',            unit: '%' },
       { key: 'pullbackMinHotScore',     label: 'Min Hot Score' },
     ],
@@ -321,7 +321,7 @@ export function SettingsForm({ settings }: { settings: any }) {
     </div>
   );
 
-  const renderField = (key: keyof SettingsState, label: string, unit?: string) => {
+  const renderField = (key: keyof SettingsState, label: string, unit?: string, min?: number, max?: number) => {
     const value = form[key];
     return (
       <label key={key} className="space-y-1">
@@ -333,7 +333,7 @@ export function SettingsForm({ settings }: { settings: any }) {
         ) : BOOLEAN_KEYS.has(key) ? (
           <SelectField value={String(value)} onChange={(v) => setForm((f) => ({ ...f, [key]: v === 'true' }))} options={[{ value: 'true', label: 'Enabled' }, { value: 'false', label: 'Disabled' }]} />
         ) : (
-          <input className={inputCls} type="number" step="any" value={String(value)} onChange={(e) => setForm((f) => ({ ...f, [key]: Number(e.target.value) }))} />
+          <input className={inputCls} type="number" step="any" min={min} max={max} value={String(value)} onChange={(e) => setForm((f) => ({ ...f, [key]: Number(e.target.value) }))} />
         )}
       </label>
     );
@@ -348,7 +348,7 @@ export function SettingsForm({ settings }: { settings: any }) {
             {section.description && <span className="text-[11px] text-dim">{section.description}</span>}
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {section.fields.map(({ key, label, unit }) => renderField(key, label, unit))}
+            {section.fields.map(({ key, label, unit, min, max }) => renderField(key, label, unit, min, max))}
           </div>
         </div>
       ))}
@@ -359,6 +359,11 @@ export function SettingsForm({ settings }: { settings: any }) {
           variant="default"
           disabled={isPending}
           onClick={async () => {
+            if (form.pullbackAtrMultiplier > 10) {
+              toast.error('Pullback ATR Zone must be 10 or less');
+              return;
+            }
+
             setPending(true);
             try {
               const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3333/api'}/settings`, {
@@ -368,8 +373,9 @@ export function SettingsForm({ settings }: { settings: any }) {
                 credentials: 'include',
               });
               if (!res.ok) {
-                const body = await res.json().catch(() => ({})) as { message?: string };
-                toast.error(body.message ?? `Save failed (${res.status})`);
+                const body = await res.json().catch(() => ({})) as { message?: string | string[] };
+                const message = Array.isArray(body.message) ? body.message.join(', ') : body.message;
+                toast.error(message ?? `Save failed (${res.status})`);
               } else {
                 toast.success('Settings saved');
                 router.refresh();
