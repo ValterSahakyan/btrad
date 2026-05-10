@@ -18,6 +18,7 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
+ENV PRISMA_SKIP_POSTINSTALL_GENERATE=true
 
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
@@ -26,6 +27,7 @@ COPY --chown=appuser:appgroup backend/package.json backend/package.json
 COPY --chown=appuser:appgroup frontend/package.json frontend/package.json
 COPY --from=builder --chown=appuser:appgroup /app/node_modules ./node_modules
 COPY --from=builder --chown=appuser:appgroup /app/backend ./backend
+COPY --chown=appuser:appgroup backend/docker/start.sh /app/backend/docker/start.sh
 
 EXPOSE 3000
 
@@ -36,4 +38,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
 
 USER appuser
 
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]
+CMD ["sh", "docker/start.sh"]

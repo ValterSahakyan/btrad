@@ -15,20 +15,26 @@ export class CleanupScheduler {
 
   @Cron(CronExpression.EVERY_DAY_AT_3AM)
   async handleCleanup(): Promise<void> {
-    const now = Date.now();
+    try {
+      const now = Date.now();
 
-    const snapshotCutoff = new Date(now - SNAPSHOT_RETAIN_DAYS * 86_400_000);
-    const logCutoff = new Date(now - LOG_RETAIN_DAYS * 86_400_000);
-    const riskCutoff = new Date(now - RISK_EVENT_RETAIN_DAYS * 86_400_000);
+      const snapshotCutoff = new Date(now - SNAPSHOT_RETAIN_DAYS * 86_400_000);
+      const logCutoff = new Date(now - LOG_RETAIN_DAYS * 86_400_000);
+      const riskCutoff = new Date(now - RISK_EVENT_RETAIN_DAYS * 86_400_000);
 
-    const [snapshots, logs, riskEvents] = await Promise.all([
-      this.prisma.marketSnapshot.deleteMany({ where: { createdAt: { lt: snapshotCutoff } } }),
-      this.prisma.botLog.deleteMany({ where: { createdAt: { lt: logCutoff } } }),
-      this.prisma.riskEvent.deleteMany({ where: { createdAt: { lt: riskCutoff } } }),
-    ]);
+      const [snapshots, logs, riskEvents] = await Promise.all([
+        this.prisma.marketSnapshot.deleteMany({ where: { createdAt: { lt: snapshotCutoff } } }),
+        this.prisma.botLog.deleteMany({ where: { createdAt: { lt: logCutoff } } }),
+        this.prisma.riskEvent.deleteMany({ where: { createdAt: { lt: riskCutoff } } }),
+      ]);
 
-    this.logger.log(
-      `DB cleanup: removed ${snapshots.count} snapshots, ${logs.count} logs, ${riskEvents.count} risk events`,
-    );
+      this.logger.log(
+        `DB cleanup: removed ${snapshots.count} snapshots, ${logs.count} logs, ${riskEvents.count} risk events`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Cleanup scheduler failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 }

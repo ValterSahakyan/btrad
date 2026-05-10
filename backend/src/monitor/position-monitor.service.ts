@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Prisma, Trade } from '@prisma/client';
 import { BinanceService } from '../binance/binance.service';
 import { OrderExecutionService } from '../execution/order-execution.service';
@@ -14,6 +14,7 @@ type LiveTradeWithOrders = Prisma.TradeGetPayload<{
 
 @Injectable()
 export class PositionMonitorService implements OnModuleInit {
+  private readonly logger = new Logger(PositionMonitorService.name);
   private running = false;
 
   constructor(
@@ -38,6 +39,10 @@ export class PositionMonitorService implements OnModuleInit {
       await this.expireStaleSignals();
       await this.refillOpenSlots();
       await this.ensureContinuousLiveFlow();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Position monitor run failed: ${message}`);
+      await this.logsService.error('monitor', 'Position monitor run failed', { error: message });
     } finally {
       this.running = false;
     }
