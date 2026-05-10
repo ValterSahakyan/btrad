@@ -14,7 +14,6 @@ import { ConfidenceScoreService } from '../scoring/confidence-score.service';
 import { applyWeekendOverrides } from '../settings/weekend-settings';
 import { StrategyConfig } from '../strategies/strategy.interface';
 import { StrategySelectorService } from '../strategies/strategy-selector.service';
-import { TelegramService } from '../telegram/telegram.service';
 import { HotScoreService } from './hot-score.service';
 
 type StrategyHealth = {
@@ -41,7 +40,6 @@ export class ScannerService {
     private readonly confidenceScoreService: ConfidenceScoreService,
     private readonly riskEngineService: RiskEngineService,
     private readonly orderExecutionService: OrderExecutionService,
-    private readonly telegramService: TelegramService,
   ) {
     const connection = new Redis(this.configService.get<string>('redisUrl', 'redis://localhost:6379'), {
       maxRetriesPerRequest: null,
@@ -122,6 +120,12 @@ export class ScannerService {
 
     for (const { record: symbolRecord, ticker } of sorted) {
       try {
+        // Re-check pause status frequently during the long loop to abort early
+        const freshSettings = await this.prisma.botSettings.findFirst();
+        if (freshSettings?.isPaused) {
+          await this.logsService.info('scanner', 'Scan aborted early: Bot was paused');
+          break;
+        }
         const [candles15m, candles1h, fundingRate, openInterest] = await Promise.all([
           this.binanceService.fetchKlines({ symbol: symbolRecord.symbol, interval: '15m', limit: 200 }),
           this.binanceService.fetchKlines({ symbol: symbolRecord.symbol, interval: '1h', limit: 200 }),
@@ -330,25 +334,6 @@ export class ScannerService {
         createdDirectionCounts.set(candidate.direction, (createdDirectionCounts.get(candidate.direction) ?? 0) + 1);
 
         const autoExecute = settings?.requireDashboardConfirmation === false;
-
-        if (!autoExecute) {
-          void this.telegramService
-            .sendSignal({
-              symbol: symbolRecord.symbol,
-              strategy: candidate.strategy,
-              direction: candidate.direction,
-              entryPrice: candidate.entryPrice,
-              stopLoss: candidate.stopLoss,
-              takeProfit1: candidate.takeProfit1,
-              takeProfit2: candidate.takeProfit2,
-              riskReward: candidate.riskReward,
-              leverage: risk.leverage,
-              confidenceScore,
-              hotScore,
-              reasons: candidate.reasonList,
-            })
-            .catch(() => null);
-        }
 
         if (autoExecute) {
           void this.autoExecute(signal.id).catch(async (err: unknown) => {

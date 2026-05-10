@@ -64,6 +64,7 @@ export interface BinancePosition {
   markPrice: string;
   unRealizedProfit: string;
   leverage: string;
+  updateTime: number;
 }
 
 export interface KlineRequest {

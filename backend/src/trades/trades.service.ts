@@ -13,10 +13,19 @@ export class TradesService {
   ) {}
 
   async list() {
-    const trades = await this.prisma.trade.findMany({
+    const openTradesQ = await this.prisma.trade.findMany({
+      where: { status: 'live_open' },
       include: { signal: true, orders: true },
       orderBy: { createdAt: 'desc' },
     });
+
+    const closedTradesQ = await this.prisma.trade.findMany({
+      where: { status: { not: 'live_open' } },
+      include: { signal: true, orders: true },
+      orderBy: { closedAt: 'desc' },
+    });
+
+    const trades = [...openTradesQ, ...closedTradesQ];
 
     try {
       const positions = await this.binanceService.fetchOpenPositions();
@@ -58,10 +67,10 @@ export class TradesService {
             pnl: Number(position.unRealizedProfit),
             pnlPercent: margin > 0 ? (Number(position.unRealizedProfit) / margin) * 100 : 0,
             status: 'live_open',
-            openedAt: null,
+            openedAt: new Date(position.updateTime || Date.now()),
             closedAt: null,
-            createdAt: new Date(0),
-            updatedAt: new Date(0),
+            createdAt: new Date(position.updateTime || Date.now()),
+            updatedAt: new Date(position.updateTime || Date.now()),
             signal: null,
             orders: [],
             markPrice: Number(position.markPrice),

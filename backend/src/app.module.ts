@@ -20,8 +20,6 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { AuthModule } from './auth/auth.module';
 import { AuthGuard } from './auth/auth.guard';
 import { PositionMonitorModule } from './monitor/position-monitor.module';
-import { TelegramModule } from './telegram/telegram.module';
-
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -46,7 +44,6 @@ import { TelegramModule } from './telegram/telegram.module';
     DashboardModule,
     AuthModule,
     PositionMonitorModule,
-    TelegramModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: AuthGuard },

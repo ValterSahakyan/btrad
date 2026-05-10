@@ -6,8 +6,6 @@ import { LogsService } from '../logs/logs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ScannerService } from '../scanner/scanner.service';
 import { applyWeekendOverrides } from '../settings/weekend-settings';
-import { TelegramService } from '../telegram/telegram.service';
-
 type LiveTradeWithOrders = Prisma.TradeGetPayload<{
   include: { orders: true };
 }>;
@@ -23,7 +21,6 @@ export class PositionMonitorService implements OnModuleInit {
     private readonly orderExecutionService: OrderExecutionService,
     private readonly logsService: LogsService,
     private readonly scannerService: ScannerService,
-    private readonly telegramService: TelegramService,
   ) {}
 
   onModuleInit(): void {
@@ -74,9 +71,6 @@ export class PositionMonitorService implements OnModuleInit {
         'critical',
         { symbols },
       );
-      await this.telegramService.sendMessage(
-        `<b>CRITICAL:</b> startup reconciliation found Binance positions without DB trades.\nManual review required: ${symbols.join(', ')}`,
-      );
     } catch (err) {
       await this.logsService.error('startup-reconcile', 'Startup reconciliation failed', {
         error: err instanceof Error ? err.message : String(err),
@@ -117,6 +111,34 @@ export class PositionMonitorService implements OnModuleInit {
       for (const trade of remainingOpenLiveTrades) {
         if (activeSymbols.has(trade.symbol)) continue;
         await this.finalizeExchangeClosedTrade(trade);
+      }
+
+      // Import orphan trades into database to preserve history
+      const dbSymbols = new Set(openLiveTrades.map((t) => t.symbol));
+      for (const pos of binancePositions) {
+        if (!dbSymbols.has(pos.symbol)) {
+          const quantity = Math.abs(Number(pos.positionAmt));
+          if (quantity <= 0) continue;
+          
+          const entryPrice = Number(pos.entryPrice);
+          const leverage = Math.max(1, Number(pos.leverage) || 1);
+          const margin = (quantity * entryPrice) / leverage;
+          
+          await this.prisma.trade.create({
+            data: {
+              symbol: pos.symbol,
+              direction: Number(pos.positionAmt) > 0 ? 'LONG' : 'SHORT',
+              entryPrice,
+              quantity,
+              leverage,
+              margin: Number(margin.toFixed(4)),
+              status: 'live_open',
+              openedAt: new Date(pos.updateTime || Date.now()),
+            },
+          });
+          
+          await this.logsService.info('monitor', `Imported orphan position into database: ${pos.symbol}`);
+        }
       }
     } catch (err) {
       await this.logsService.warn('monitor', 'Live position check failed', {

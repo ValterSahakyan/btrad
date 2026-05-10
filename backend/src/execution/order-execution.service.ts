@@ -4,15 +4,12 @@ import { BinanceService } from '../binance/binance.service';
 import { LogsService } from '../logs/logs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { applyWeekendOverrides } from '../settings/weekend-settings';
-import { TelegramService } from '../telegram/telegram.service';
-
 @Injectable()
 export class OrderExecutionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly binanceService: BinanceService,
     private readonly logsService: LogsService,
-    private readonly telegramService: TelegramService,
   ) {}
 
   async approveLive(signalId: string, actor = 'system'): Promise<unknown> {
@@ -331,24 +328,6 @@ export class OrderExecutionService {
       quantity,
       leverage: signal.leverage,
     });
-
-    void this.telegramService
-      .sendTradeExecuted({
-        symbol: sym.symbol,
-        strategy: signal.strategy,
-        direction: signal.direction,
-        entryPrice: fillPrice,
-        stopLoss: signal.stopLoss,
-        takeProfit1: signal.takeProfit1,
-        takeProfit2: signal.takeProfit2,
-        riskReward: signal.riskReward,
-        leverage: signal.leverage,
-        confidenceScore: signal.confidenceScore,
-        hotScore: signal.hotScore,
-        reasons: ((signal.reasonJson as Record<string, unknown>)?.reasons as string[]) ?? [],
-        mode: 'live',
-      })
-      .catch(() => null);
 
     return trade;
     } catch (err) {

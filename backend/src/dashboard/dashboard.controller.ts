@@ -5,7 +5,6 @@ import { ScannerService } from '../scanner/scanner.service';
 import { LogsService } from '../logs/logs.service';
 import { MarketRegimeService } from '../market-regime/market-regime.service';
 import { BinanceService } from '../binance/binance.service';
-import { TelegramService } from '../telegram/telegram.service';
 import { UpdateSettingsDto } from './dto/update-settings.dto';
 
 type SnapshotRow = {
@@ -59,7 +58,6 @@ export class DashboardController {
     private readonly logsService: LogsService,
     private readonly marketRegimeService: MarketRegimeService,
     private readonly binanceService: BinanceService,
-    private readonly telegramService: TelegramService,
   ) {}
 
   @Get('/status')
@@ -321,9 +319,6 @@ export class DashboardController {
     await this.logsService.risk('emergency_stop', 'Emergency stop activated; pending signals cancelled', 'critical', {
       actor,
     });
-    await this.telegramService.sendMessage(
-      `<b>EMERGENCY STOP</b>\nActor: ${actor}\nBot stopped and pending signals cancelled.`,
-    );
     return {
       ...serializeSettings(updated),
       message: 'Emergency stop activated. Bot stopped and pending signals cancelled.',
@@ -476,17 +471,6 @@ export class DashboardController {
       'mode',
       'realTradingEnabled',
       'enableRealTrading',
-      'defaultLeverage',
-      'maxLeverage',
-      'riskPerTradePercent',
-      'maxDailyLossPercent',
-      'maxOpenTrades',
-      'maxHoldingHours',
-      'maxConsecutiveLosses',
-      'minPositionUsd',
-      'maxPositionUsd',
-      'requireDashboardConfirmation',
-      'allowAutoLiveExecution',
     ];
 
     const attempted = blockedKeys.filter((key) => body[key] !== undefined && body[key] !== existing[key]);
