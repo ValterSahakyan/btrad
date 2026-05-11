@@ -51,7 +51,8 @@
       "Bash(docker-compose exec *)",
       "Bash(powershell -Command \"netstat -ano | Select-String ':3333'\")",
       "Bash(echo \"EXIT: $?\")",
-      "Bash(node dist/main.js)"
+      "Bash(node dist/main.js)",
+      "Bash(git status *)"
     ]
   }
 }
