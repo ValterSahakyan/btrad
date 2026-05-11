@@ -117,10 +117,19 @@ export default function TradesPage() {
     if (!ok) return;
     setClosingId(tradeId);
     try {
-      await fetch(clientApiPath(`/trades/${tradeId}/close-live`), {
+      const res = await fetch(clientApiPath(`/trades/${tradeId}/close-live`), {
         method: 'POST', credentials: 'include',
       });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const msg = body?.message ?? `Close failed (${res.status})`;
+        setBackendError(typeof msg === 'string' ? msg : JSON.stringify(msg));
+        return;
+      }
+      setBackendError(null);
       await fetchTrades();
+    } catch {
+      setBackendError('Close request failed — backend unavailable');
     } finally {
       setClosingId(null);
     }
@@ -271,7 +280,7 @@ export default function TradesPage() {
                         <td>{pnlPct(t.pnlPercent)}</td>
                         <td>{statusBadge(t.status)}</td>
                         <td>
-                          {isLive && (
+                          {isLive && !t.orphanedFromDb && (
                             <button
                               onClick={() => handleClose(t.id)}
                               disabled={closingId === t.id}
@@ -282,6 +291,9 @@ export default function TradesPage() {
                             >
                               {closingId === t.id ? '…' : 'Close'}
                             </button>
+                          )}
+                          {isLive && t.orphanedFromDb && (
+                            <span className="text-[11px] text-dim italic">manual</span>
                           )}
                         </td>
                       </tr>

@@ -124,6 +124,7 @@ export class TradesService {
     const side = trade.direction === 'LONG' ? 'SELL' : 'BUY';
     const ts = Date.now();
 
+    let exitPrice: number;
     const closeResult = await this.binanceService.placeOrder({
       symbol: trade.symbol,
       side,
@@ -131,10 +132,22 @@ export class TradesService {
       quantity: trade.quantity,
       reduceOnly: true,
       clientOrderId: `${id.slice(0, 8)}-close-${ts}`,
+    }).catch(async (err) => {
+      // Position may have already been closed by SL/TP on the exchange.
+      // Finalize the DB record using mark price rather than throwing.
+      await this.logsService.warn('trades', `Market close order failed — position likely already closed: ${err instanceof Error ? err.message : String(err)}`, {
+        tradeId: id,
+        symbol: trade.symbol,
+      });
+      return null;
     });
 
-    const fillPrice = Number(closeResult.avgPrice);
-    const exitPrice = fillPrice > 0 ? fillPrice : await this.binanceService.fetchMarkPrice(trade.symbol);
+    if (closeResult === null) {
+      exitPrice = await this.binanceService.fetchMarkPrice(trade.symbol);
+    } else {
+      const fillPrice = Number(closeResult.avgPrice);
+      exitPrice = fillPrice > 0 ? fillPrice : await this.binanceService.fetchMarkPrice(trade.symbol);
+    }
 
     const dirMult = trade.direction === 'LONG' ? 1 : -1;
     const pnl = (exitPrice - trade.entryPrice) * trade.quantity * dirMult;
@@ -151,19 +164,21 @@ export class TradesService {
       },
     });
 
-    await this.prisma.order.create({
-      data: {
-        tradeId: id,
-        binanceOrderId: String(closeResult.orderId),
-        symbol: trade.symbol,
-        side,
-        type: 'MARKET',
-        quantity: trade.quantity,
-        price: exitPrice,
-        status: 'filled',
-        rawResponseJson: closeResult as unknown as Prisma.InputJsonValue,
-      },
-    });
+    if (closeResult) {
+      await this.prisma.order.create({
+        data: {
+          tradeId: id,
+          binanceOrderId: String(closeResult.orderId),
+          symbol: trade.symbol,
+          side,
+          type: 'MARKET',
+          quantity: trade.quantity,
+          price: exitPrice,
+          status: 'filled',
+          rawResponseJson: closeResult as unknown as Prisma.InputJsonValue,
+        },
+      });
+    }
 
     await this.logsService.info('trades', 'Live trade manually closed', {
       tradeId: id,
