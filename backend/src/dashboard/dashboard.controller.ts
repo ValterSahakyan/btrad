@@ -69,16 +69,14 @@ export class DashboardController {
     const executedSignals = await this.prisma.signal.count({
       where: { status: 'live_executed' },
     });
-    const dbOpenTradeRows = await this.prisma.trade.findMany({
+    const dbOpenTrades = await this.prisma.trade.count({
       where: { status: 'live_open' },
-      select: { symbol: true },
     });
-    const dbOpenTrades = new Set(dbOpenTradeRows.map((trade) => trade.symbol)).size;
     let exchangeOpenTrades = dbOpenTrades;
     if (settings?.mode === 'live' && this.binanceService.hasApiKeys()) {
       try {
         const positions = await this.binanceService.fetchOpenPositions();
-        exchangeOpenTrades = new Set(positions.map((position) => position.symbol)).size;
+        exchangeOpenTrades = positions.length;
       } catch {
         exchangeOpenTrades = dbOpenTrades;
       }

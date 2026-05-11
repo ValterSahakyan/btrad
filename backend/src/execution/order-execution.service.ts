@@ -34,6 +34,10 @@ export class OrderExecutionService {
       include: { symbol: true },
     });
     if (!signal) throw new NotFoundException('Signal not found');
+    if (!signal.strategy) {
+      await this.prisma.signal.update({ where: { id: signalId }, data: { status: 'failed' } });
+      throw new BadRequestException('Signal has no strategy — cannot execute');
+    }
 
     // Helper to revert signal back to active so it can be retried
     const revertToActive = () =>
@@ -129,13 +133,24 @@ export class OrderExecutionService {
         );
       }
       const tpInvalid =
-        signal.direction === 'LONG' ? signal.takeProfit1 <= markPrice : signal.takeProfit1 >= markPrice;
+        signal.direction === 'LONG' ? signal.takeProfit2 <= markPrice : signal.takeProfit2 >= markPrice;
       if (tpInvalid) {
         await this.prisma.signal.update({ where: { id: signalId }, data: { status: 'expired' } });
         throw new BadRequestException(
-          `Signal is stale: take profit ${signal.takeProfit1} is on the wrong side of current mark price ${markPrice}. Signal expired.`,
+          `Signal is stale: take profit ${signal.takeProfit2} is on the wrong side of current mark price ${markPrice}. Signal expired.`,
         );
       }
+    }
+
+    // Second duplicate guard — the first check (above) can be bypassed when two
+    // executions race through validation simultaneously. Re-check here, just before
+    // any exchange orders are placed, to catch that window.
+    const raceGuard = await this.prisma.trade.findFirst({
+      where: { symbol: sym.symbol, status: 'live_open' },
+    });
+    if (raceGuard) {
+      await revertToActive();
+      throw new BadRequestException(`A live trade for ${signal.symbol.symbol} is already open`);
     }
 
     await this.binanceService.setLeverage(sym.symbol, signal.leverage);
@@ -265,7 +280,7 @@ export class OrderExecutionService {
         side: closeSide,
         type: 'TAKE_PROFIT_MARKET',
         quantity,
-        stopPrice: Number(signal.takeProfit1.toFixed(sym.pricePrecision)),
+        stopPrice: Number(signal.takeProfit2.toFixed(sym.pricePrecision)),
         reduceOnly: true,
         clientOrderId: `${idPrefix}-tp-${ts}-${rand}`,
       })
@@ -288,7 +303,7 @@ export class OrderExecutionService {
           side: closeSide,
           type: 'TAKE_PROFIT_MARKET',
           quantity,
-          price: signal.takeProfit1,
+          price: signal.takeProfit2,
           status: 'open',
           rawResponseJson: tpResult as unknown as Prisma.InputJsonValue,
         },
@@ -309,7 +324,7 @@ export class OrderExecutionService {
       fillPrice,
       actualMargin,
       stopLoss: signal.stopLoss,
-      takeProfit1: signal.takeProfit1,
+      takeProfit2: signal.takeProfit2,
       slOrderId: slResult.orderId,
       tpOrderId: tpResult?.orderId ?? null,
     });
@@ -355,6 +370,7 @@ function shouldMarkSignalFailed(err: unknown): boolean {
     'Position size below Binance minimum notional',
     'Signal has expired',
     'Signal is stale',
+    'Signal has no strategy',
     'SL order failed',
   ].some((text) => message.includes(text));
 }

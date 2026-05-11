@@ -309,6 +309,7 @@ export class ScannerService {
         const existingSignal = await this.prisma.signal.findFirst({
           where: {
             symbolId: symbolRecord.id,
+            direction: candidate.direction,
             OR: [
               { status: { in: ['pending', 'active', 'approved'] } },
               { createdAt: { gte: new Date(Date.now() - 10 * 60_000) } },

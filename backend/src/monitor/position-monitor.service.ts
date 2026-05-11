@@ -113,32 +113,46 @@ export class PositionMonitorService implements OnModuleInit {
         await this.finalizeExchangeClosedTrade(trade);
       }
 
-      // Import orphan trades into database to preserve history
+      // Import orphan trades — positions on Binance with no matching DB record.
+      // These are externally-opened positions (manual trades, other bots, etc.)
+      // that the bot did not open. They are imported so the position monitor can
+      // track and close them, but they carry no signal or strategy metadata.
       const dbSymbols = new Set(openLiveTrades.map((t) => t.symbol));
       for (const pos of binancePositions) {
-        if (!dbSymbols.has(pos.symbol)) {
-          const quantity = Math.abs(Number(pos.positionAmt));
-          if (quantity <= 0) continue;
-          
-          const entryPrice = Number(pos.entryPrice);
-          const leverage = Math.max(1, Number(pos.leverage) || 1);
-          const margin = (quantity * entryPrice) / leverage;
-          
-          await this.prisma.trade.create({
-            data: {
-              symbol: pos.symbol,
-              direction: Number(pos.positionAmt) > 0 ? 'LONG' : 'SHORT',
-              entryPrice,
-              quantity,
-              leverage,
-              margin: Number(margin.toFixed(4)),
-              status: 'live_open',
-              openedAt: new Date(pos.updateTime || Date.now()),
-            },
-          });
-          
-          await this.logsService.info('monitor', `Imported orphan position into database: ${pos.symbol}`);
-        }
+        if (dbSymbols.has(pos.symbol)) continue;
+
+        const quantity = Math.abs(Number(pos.positionAmt));
+        if (quantity <= 0) continue;
+
+        // Skip if a trade was opened by normal execution during this monitor cycle
+        const alreadyExists = await this.prisma.trade.findFirst({
+          where: { symbol: pos.symbol, status: 'live_open' },
+        });
+        if (alreadyExists) continue;
+
+        const entryPrice = Number(pos.entryPrice);
+        const leverage = Math.max(1, Number(pos.leverage) || 1);
+        const margin = (quantity * entryPrice) / leverage;
+
+        await this.prisma.trade.create({
+          data: {
+            symbol: pos.symbol,
+            direction: Number(pos.positionAmt) > 0 ? 'LONG' : 'SHORT',
+            entryPrice,
+            quantity,
+            leverage,
+            margin: Number(margin.toFixed(4)),
+            status: 'live_open',
+            openedAt: new Date(pos.updateTime || Date.now()),
+          },
+        });
+
+        await this.logsService.risk(
+          'orphan_position_imported',
+          `Orphan position imported: ${pos.symbol} — opened outside the bot (manual trade or external tool). No signal or strategy attached.`,
+          'high',
+          { symbol: pos.symbol, quantity, entryPrice, leverage },
+        );
       }
     } catch (err) {
       await this.logsService.warn('monitor', 'Live position check failed', {
