@@ -54,7 +54,7 @@ export class ScannerService {
 
   async runScan(): Promise<{ processed: number; signalsCreated: number; skipped?: boolean }> {
     const lockToken = randomToken();
-    const acquired = await this.redis.set('scanner:run-lock', lockToken, 'PX', 5 * 60_000, 'NX');
+    const acquired = await this.redis.set('scanner:run-lock', lockToken, 'PX', 30 * 60_000, 'NX');
     if (!acquired) {
       return { processed: 0, signalsCreated: 0, skipped: true };
     }
@@ -300,9 +300,20 @@ export class ScannerService {
           continue;
         }
 
-        // Skip if already have a pending or active signal for this symbol
+        // Skip if a signal for this symbol was already created or is in-flight.
+        // Include 'approved' because autoExecute claims signals (active→approved) almost
+        // instantly — a check for only 'pending'/'active' misses the window where a
+        // concurrent scan or the position monitor would create a second trade.
+        // Also cover any signal created in the last 10 minutes to guard against
+        // concurrent scanner instances that outlast the Redis lock TTL.
         const existingSignal = await this.prisma.signal.findFirst({
-          where: { symbolId: symbolRecord.id, status: { in: ['pending', 'active'] } },
+          where: {
+            symbolId: symbolRecord.id,
+            OR: [
+              { status: { in: ['pending', 'active', 'approved'] } },
+              { createdAt: { gte: new Date(Date.now() - 10 * 60_000) } },
+            ],
+          },
         });
         if (existingSignal) {
           duplicateSignalSkipped += 1;

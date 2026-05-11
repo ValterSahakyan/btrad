@@ -315,9 +315,12 @@ export class PositionMonitorService implements OnModuleInit {
     if (availableSlots <= 0) return;
 
     const openSymbols = new Set(openTrades.map((trade) => trade.symbol));
+    // Only pick up 'active' signals — never touch 'approved' ones.
+    // A signal in 'approved' is already mid-execution by autoExecute; reviving it
+    // (approved → active) races with the in-progress executor and causes duplicate trades.
     const candidates = await this.prisma.signal.findMany({
       where: {
-        status: { in: ['active', 'approved'] },
+        status: 'active',
         expiresAt: { gt: new Date() },
       },
       include: { symbol: true },
@@ -332,14 +335,6 @@ export class PositionMonitorService implements OnModuleInit {
       if (openSymbols.has(signal.symbol.symbol)) continue;
 
       try {
-        if (signal.status === 'approved') {
-          const revived = await this.prisma.signal.updateMany({
-            where: { id: signal.id, status: 'approved' },
-            data: { status: 'active' },
-          });
-          if (revived.count === 0) continue;
-        }
-
         await this.orderExecutionService.approveLive(signal.id, 'system-auto-refill');
         openSymbols.add(signal.symbol.symbol);
         executed += 1;
