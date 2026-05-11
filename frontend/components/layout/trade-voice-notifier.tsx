@@ -25,7 +25,9 @@ type TradeRow = {
 export function TradeVoiceNotifier() {
   const initializedRef = useRef(false);
   const seenTradeIdsRef = useRef<Set<string>>(new Set());
-  const { toasts, dismiss, success } = useToast();
+  // Stores full trade data for announced-open trades so we can speak the close
+  const openTradeDataRef = useRef<Map<string, TradeRow>>(new Map());
+  const { toasts, dismiss, success, error } = useToast();
 
   useEffect(() => {
     try {
@@ -45,19 +47,28 @@ export function TradeVoiceNotifier() {
       window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify([...seenTradeIdsRef.current]));
     };
 
-    const speakTradeOpened = (trade: TradeRow) => {
+    const speak = (message: string) => {
       if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-
-      const directionLabel = trade.direction === 'LONG' ? 'long' : 'short';
-      const message = `${directionLabel} position opened on ${trade.symbol}`;
-
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(message);
       utterance.rate = 1;
       utterance.pitch = 1;
       utterance.volume = 1;
       window.speechSynthesis.speak(utterance);
+    };
+
+    const speakTradeOpened = (trade: TradeRow) => {
+      const directionLabel = trade.direction === 'LONG' ? 'long' : 'short';
+      const message = `${directionLabel} position opened on ${trade.symbol}`;
+      speak(message);
       success(message);
+    };
+
+    const speakTradeClosed = (trade: TradeRow) => {
+      const directionLabel = trade.direction === 'LONG' ? 'long' : 'short';
+      const message = `${directionLabel} position closed on ${trade.symbol}`;
+      speak(message);
+      error(message);
     };
 
     const checkTrades = async () => {
@@ -87,9 +98,21 @@ export function TradeVoiceNotifier() {
           if (Date.now() - openedMs < ANNOUNCE_DEBOUNCE_MS) continue;
           speakTradeOpened(trade);
           seenTradeIdsRef.current.add(trade.id);
+          openTradeDataRef.current.set(trade.id, trade);
         }
 
-        seenTradeIdsRef.current = currentOpenIds;
+        // Remove IDs that are no longer open so closed trades don't block future
+        // entries on the same symbol, but do NOT wholesale replace seenTradeIds
+        // with currentOpenIds — that would mark debounced trades as seen before
+        // they've been announced.
+        for (const seenId of seenTradeIdsRef.current) {
+          if (!currentOpenIds.has(seenId)) {
+            const closedTrade = openTradeDataRef.current.get(seenId);
+            if (closedTrade && !disposed) speakTradeClosed(closedTrade);
+            seenTradeIdsRef.current.delete(seenId);
+            openTradeDataRef.current.delete(seenId);
+          }
+        }
         persistSeenIds();
       } catch {
         // Voice alerts are non-critical; ignore polling errors.
@@ -103,7 +126,7 @@ export function TradeVoiceNotifier() {
       disposed = true;
       window.clearInterval(intervalId);
     };
-  }, [success]);
+  }, [success, error]);
 
   return <ToastContainer toasts={toasts} onDismiss={dismiss} />;
 }
