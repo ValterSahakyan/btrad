@@ -52,7 +52,7 @@ export class RangeBounceStrategy implements TradingStrategy {
 
       const takeProfit1 = Math.min(currentPrice + risk * cfg.tp1Multiplier, levels.resistance - atr14 * 0.3);
       const takeProfit2 = Math.min(currentPrice + risk * cfg.tp2Multiplier, levels.resistance);
-      const riskReward = (takeProfit1 - currentPrice) / risk;
+      const riskReward = (takeProfit2 - currentPrice) / risk;
       if (riskReward < context.minRiskReward) return null;
 
       return {
@@ -89,7 +89,7 @@ export class RangeBounceStrategy implements TradingStrategy {
 
       const takeProfit1 = Math.max(currentPrice - risk * cfg.tp1Multiplier, levels.support + atr14 * 0.3);
       const takeProfit2 = Math.max(currentPrice - risk * cfg.tp2Multiplier, levels.support);
-      const riskReward = (currentPrice - takeProfit1) / risk;
+      const riskReward = (currentPrice - takeProfit2) / risk;
       if (riskReward < context.minRiskReward) return null;
 
       return {

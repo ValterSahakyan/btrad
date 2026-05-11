@@ -60,7 +60,7 @@ export class TrendReclaimStrategy implements TradingStrategy {
 
       const takeProfit1 = currentPrice + risk * cfg.tp1Multiplier;
       const takeProfit2 = currentPrice + risk * cfg.tp2Multiplier;
-      const riskReward = (takeProfit1 - currentPrice) / risk;
+      const riskReward = (takeProfit2 - currentPrice) / risk;
       if (riskReward < context.minRiskReward) return null;
 
       return {
@@ -100,7 +100,7 @@ export class TrendReclaimStrategy implements TradingStrategy {
 
       const takeProfit1 = currentPrice - risk * cfg.tp1Multiplier;
       const takeProfit2 = currentPrice - risk * cfg.tp2Multiplier;
-      const riskReward = (currentPrice - takeProfit1) / risk;
+      const riskReward = (currentPrice - takeProfit2) / risk;
       if (riskReward < context.minRiskReward) return null;
 
       return {
