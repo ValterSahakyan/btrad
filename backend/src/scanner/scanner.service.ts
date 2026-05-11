@@ -213,13 +213,29 @@ export class ScannerService {
             riskScore: 75,
           });
 
+          let effectiveStopLoss = candidate.stopLoss;
+          if (settings?.fixedRoeEnabled) {
+            const feeBps = Number(process.env.ESTIMATED_TAKER_FEE_BPS ?? 4);
+            const feeRate = feeBps / 10000;
+            const leverage = Math.min(settings.maxLeverage ?? 5, settings.defaultLeverage ?? 3);
+            effectiveStopLoss = this.calculateFixedRoePrice({
+              entryPrice: candidate.entryPrice,
+              direction: candidate.direction,
+              leverage,
+              targetRoePercent: settings.fixedRoeSlPercent ?? 20,
+              feeRate,
+              isTp: false,
+            });
+            effectiveStopLoss = Number(effectiveStopLoss.toFixed(symbolRecord.pricePrecision));
+          }
+
           const expiresAt = new Date(Date.now() + (settings?.signalExpirationMinutes ?? 15) * 60_000);
           const risk = await this.riskEngineService.validateSignal({
             symbol: symbolRecord.symbol,
             direction: candidate.direction,
             strategy: candidate.strategy,
             entryPrice: candidate.entryPrice,
-            stopLoss: candidate.stopLoss,
+            stopLoss: effectiveStopLoss,
             riskReward: candidate.riskReward,
             spread,
             confidenceScore: provisionalConfidence,
@@ -501,9 +517,9 @@ export class ScannerService {
       const effectiveConsecutiveLosses = consecutiveLosses === -1 ? bucket.length : consecutiveLosses;
       let blockedReason: string | undefined;
 
-      if (effectiveConsecutiveLosses >= 4) {
-        blockedReason = '4 consecutive losses today';
-      } else if (bucket.length >= 6 && totalPnl < -0.75) {
+      if (effectiveConsecutiveLosses >= 6) {
+        blockedReason = '6 consecutive losses today';
+      } else if (bucket.length >= 6 && totalPnl < -2.0) {
         blockedReason = 'daily strategy drawdown exceeded';
       }
 
