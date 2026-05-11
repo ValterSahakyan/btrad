@@ -85,13 +85,21 @@ export class AuthService {
   }
 
   async isValidSession(token: string): Promise<boolean> {
-    const value = await this.redis.get(`session:${token}`);
-    return value !== null;
+    try {
+      const value = await this.redis.get(`session:${token}`);
+      return value !== null;
+    } catch {
+      return false;
+    }
   }
 
   async getSessionAddress(token: string): Promise<string | undefined> {
-    const value = await this.redis.get(`session:${token}`);
-    return value ?? undefined;
+    try {
+      const value = await this.redis.get(`session:${token}`);
+      return value ?? undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   async logout(token: string): Promise<void> {

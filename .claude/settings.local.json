@@ -48,7 +48,10 @@
       "Bash(python \"C:\\\\Users\\\\User\\\\.claude\\\\skills\\\\ui-ux-pro-max\\\\scripts\\\\search.py\" \"pro trading dashboard fintech crypto dark mode data-dense Bloomberg TradingView\" --design-system -p \"PerpScout AI\" -f markdown)",
       "Bash(docker-compose ps *)",
       "Bash(docker exec *)",
-      "Bash(docker-compose exec *)"
+      "Bash(docker-compose exec *)",
+      "Bash(powershell -Command \"netstat -ano | Select-String ':3333'\")",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(node dist/main.js)"
     ]
   }
 }
