@@ -21,8 +21,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'BTRAD — Futures Terminal',
-  description: 'Algorithmic Binance USDⓈ-M Futures trading console',
+  title: 'BTRAD - Futures Terminal',
+  description: 'Algorithmic Binance USD-M Futures trading console',
   icons: { icon: '/icon.svg' },
 };
 

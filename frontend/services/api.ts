@@ -34,7 +34,7 @@ export async function fetchApi<T>(path: string, init?: RequestInit): Promise<T> 
   }
 
   if (response.status === 401) {
-    // Stale session cookie — clear it and send user to login
+    // Stale session cookie: clear it and send the user to login.
     redirect('/api/auth/clear');
   }
 
@@ -49,7 +49,7 @@ export async function fetchApiSafe<T>(path: string, fallback: T, init?: RequestI
   try {
     return await fetchApi<T>(path, init);
   } catch (err) {
-    // Re-throw Next.js redirect/notFound signals — never swallow them
+    // Re-throw Next.js redirect/notFound signals so framework control flow stays intact.
     if (typeof err === 'object' && err !== null && 'digest' in err) throw err;
     return fallback;
   }

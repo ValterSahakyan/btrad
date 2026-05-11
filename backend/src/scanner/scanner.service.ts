@@ -517,6 +517,32 @@ export class ScannerService {
 
     return healthMap;
   }
+
+  private calculateFixedRoePrice(params: {
+    entryPrice: number;
+    direction: 'LONG' | 'SHORT';
+    leverage: number;
+    targetRoePercent: number;
+    feeRate: number;
+    isTp: boolean;
+  }): number {
+    const { entryPrice, direction, leverage, targetRoePercent, feeRate, isTp } = params;
+    const roe = targetRoePercent / 100;
+
+    if (direction === 'LONG') {
+      if (isTp) {
+        return (entryPrice * (roe / leverage + 1 + feeRate)) / (1 - feeRate);
+      }
+
+      return (entryPrice * (1 + feeRate - roe / leverage)) / (1 - feeRate);
+    }
+
+    if (isTp) {
+      return (entryPrice * (1 - feeRate - roe / leverage)) / (1 + feeRate);
+    }
+
+    return (entryPrice * (roe / leverage + 1 - feeRate)) / (1 + feeRate);
+  }
 }
 
 function effectiveMinConfidence(base: number, strategy: string): number {
@@ -601,34 +627,4 @@ function buildStrategyConfig(settings: Record<string, unknown> | null): Strategy
       minHotScore: s?.rangeBounceMinHotScore ?? 35,
     },
   };
-  }
-
-  private calculateFixedRoePrice(params: {
-    entryPrice: number;
-    direction: 'LONG' | 'SHORT';
-    leverage: number;
-    targetRoePercent: number;
-    feeRate: number;
-    isTp: boolean;
-  }): number {
-    const { entryPrice, direction, leverage, targetRoePercent, feeRate, isTp } = params;
-    const R = targetRoePercent / 100;
-    const L = leverage;
-    const F = feeRate;
-    const E = entryPrice;
-
-    if (direction === 'LONG') {
-      if (isTp) {
-        return (E * (R / L + 1 + F)) / (1 - F);
-      } else {
-        return (E * (1 + F - R / L)) / (1 - F);
-      }
-    } else {
-      if (isTp) {
-        return (E * (1 - F - R / L)) / (1 + F);
-      } else {
-        return (E * (R / L + 1 - F)) / (1 + F);
-      }
-    }
-  }
 }

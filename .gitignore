@@ -1,9 +1,11 @@
 node_modules
 .next
+frontend/.next-prod
 frontend/.next-dev
-dist
+backend/dist
 coverage
 .env
 backend/prisma/dev.db
 backend/prisma/dev.db-journal
+frontend/tsconfig.tsbuildinfo
 *.log
