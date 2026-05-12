@@ -42,7 +42,7 @@ export class StrategySelectorService {
 function rankCandidate(candidate: StrategySignalCandidate): number {
   const strategyBias =
     candidate.strategy === 'breakout_volume' ? 5
-      : candidate.strategy === 'trend_reclaim' ? 4
+      : candidate.strategy === 'trend_reclaim' ? 1
         : candidate.strategy === 'range_bounce' ? 2
           : candidate.strategy === 'pullback_continuation' ? -2
             : candidate.strategy === 'mean_reversion' ? -4

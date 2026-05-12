@@ -590,9 +590,9 @@ export class ScannerService {
 }
 
 function effectiveMinConfidence(base: number, strategy: string): number {
-  // Contrarian and counter-trend strategies need a higher bar — they fire against
-  // the prevailing move and have a structurally lower win rate.
+  // Strategies with historically poor win rates need a higher confidence bar.
   if (strategy === 'mean_reversion') return base + 5;
+  if (strategy === 'trend_reclaim') return base + 5;
   if (strategy === 'pullback_continuation') return base + 3;
   return base;
 }
