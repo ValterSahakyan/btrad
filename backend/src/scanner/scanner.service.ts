@@ -112,6 +112,7 @@ export class ScannerService {
     let riskRejected = 0;
     let duplicateTradeSkipped = 0;
     let duplicateSignalSkipped = 0;
+    let cooldownSkipped = 0;
     const riskReasonCounts = new Map<string, number>();
     const candidateStrategyCounts = new Map<string, number>();
     const createdStrategyCounts = new Map<string, number>();
@@ -300,6 +301,20 @@ export class ScannerService {
           continue;
         }
 
+        // Skip if this symbol had a trade close recently — prevents chasing a move
+        // that just ended (e.g. took profit then immediately re-entering same coin).
+        const recentTrade = await this.prisma.trade.findFirst({
+          where: {
+            symbol: symbolRecord.symbol,
+            closedAt: { gte: new Date(Date.now() - SYMBOL_COOLDOWN_MS) },
+          },
+          select: { id: true },
+        });
+        if (recentTrade) {
+          cooldownSkipped += 1;
+          continue;
+        }
+
         // Skip if a signal for this symbol was already created or is in-flight.
         // Include 'approved' because autoExecute claims signals (active→approved) almost
         // instantly — a check for only 'pending'/'active' misses the window where a
@@ -435,6 +450,7 @@ export class ScannerService {
       riskRejected,
       duplicateTradeSkipped,
       duplicateSignalSkipped,
+      cooldownSkipped,
       strategyHealth: Object.fromEntries(
         [...strategyHealth.entries()].map(([strategy, health]) => [strategy, {
           trades: health.trades,
@@ -574,6 +590,10 @@ export class ScannerService {
 }
 
 function effectiveMinConfidence(base: number, strategy: string): number {
+  // Contrarian and counter-trend strategies need a higher bar — they fire against
+  // the prevailing move and have a structurally lower win rate.
+  if (strategy === 'mean_reversion') return base + 5;
+  if (strategy === 'pullback_continuation') return base + 3;
   return base;
 }
 
@@ -599,6 +619,10 @@ function getBotVersionTag(): string {
   const tag = process.env.BOT_VERSION_TAG?.trim();
   return tag && tag.length > 0 ? tag : 'current';
 }
+
+// How long after a trade closes before the same symbol can be re-entered.
+// Prevents the scanner from immediately chasing a move that just finished.
+const SYMBOL_COOLDOWN_MS = 30 * 60_000;
 
 function randomToken(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;

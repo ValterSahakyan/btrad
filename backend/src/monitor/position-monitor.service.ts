@@ -1,5 +1,8 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Prisma, Trade } from '@prisma/client';
+
+// Must match SYMBOL_COOLDOWN_MS in scanner.service.ts
+const SYMBOL_COOLDOWN_MS = 30 * 60_000;
 import { BinanceService } from '../binance/binance.service';
 import { OrderExecutionService } from '../execution/order-execution.service';
 import { LogsService } from '../logs/logs.service';
@@ -329,6 +332,15 @@ export class PositionMonitorService implements OnModuleInit {
     if (availableSlots <= 0) return;
 
     const openSymbols = new Set(openTrades.map((trade) => trade.symbol));
+
+    // Symbols that closed recently are on cooldown — skip them even if a signal exists.
+    // Keeps the refill from immediately re-entering a symbol that just exited.
+    const recentlyClosed = await this.prisma.trade.findMany({
+      where: { closedAt: { gte: new Date(Date.now() - SYMBOL_COOLDOWN_MS) } },
+      select: { symbol: true },
+    });
+    const cooledDownSymbols = new Set(recentlyClosed.map((t) => t.symbol));
+
     // Only pick up 'active' signals — never touch 'approved' ones.
     // A signal in 'approved' is already mid-execution by autoExecute; reviving it
     // (approved → active) races with the in-progress executor and causes duplicate trades.
@@ -347,6 +359,7 @@ export class PositionMonitorService implements OnModuleInit {
     for (const signal of candidates) {
       if (executed >= availableSlots) break;
       if (openSymbols.has(signal.symbol.symbol)) continue;
+      if (cooledDownSymbols.has(signal.symbol.symbol)) continue;
 
       try {
         await this.orderExecutionService.approveLive(signal.id, 'system-auto-refill');
