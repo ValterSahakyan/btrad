@@ -93,6 +93,7 @@ export class RiskEngineService {
       input.stopLoss,
       input.stepSize,
       maxPositionUsd,
+      minPositionUsd,
     );
 
     // Use the higher of the settings floor and the exchange's own minimum notional

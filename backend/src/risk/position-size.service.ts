@@ -9,6 +9,7 @@ export class PositionSizeService {
     stopLoss: number,
     stepSize = 0.001,
     maxNotionalUsd = 0,
+    minNotionalUsd = 0,
   ): { riskAmount: number; stopDistance: number; quantity: number } {
     const riskAmount = (balance * riskPerTradePercent) / 100;
     const stopDistance = Math.abs(entryPrice - stopLoss);
@@ -16,7 +17,14 @@ export class PositionSizeService {
 
     let rawQuantity = riskAmount / stopDistance;
 
-    // Cap notional to maxPositionUsd when set (prevents huge positions from tight stops)
+    // Floor to minPositionUsd — ensures position is always at least the configured minimum.
+    // This means the bot uses minPositionUsd as a fixed bet floor rather than blocking the trade.
+    if (minNotionalUsd > 0) {
+      const minQty = minNotionalUsd / entryPrice;
+      rawQuantity = Math.max(rawQuantity, minQty);
+    }
+
+    // Cap notional to maxPositionUsd — hard ceiling regardless of risk formula.
     if (maxNotionalUsd > 0) {
       const maxQty = maxNotionalUsd / entryPrice;
       rawQuantity = Math.min(rawQuantity, maxQty);
