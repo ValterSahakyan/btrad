@@ -2,10 +2,13 @@ import { Injectable } from '@nestjs/common';
 import { clamp } from '../common/utils/math';
 import { StrategySignalCandidate } from '../common/types/trading.types';
 import { atr } from '../indicators/atr';
+import { detectCandlePatterns } from '../indicators/candlestick-patterns';
 import { ema } from '../indicators/ema';
-import { rsi } from '../indicators/rsi';
+import { priceNearOrderBlock, detectOrderBlocks } from '../indicators/order-block';
+import { rsi, detectRsiDivergence } from '../indicators/rsi';
 import { detectTrend } from '../indicators/trend';
 import { volumeAverage, volumeSpike } from '../indicators/volume';
+import { sessionScoreAdjustment } from '../settings/session-filter';
 import { StrategyContext, TradingStrategy } from './strategy.interface';
 
 @Injectable()
@@ -16,32 +19,38 @@ export class PullbackContinuationStrategy implements TradingStrategy {
     const cfg = context.strategyConfig.pullback;
     if (!cfg.enabled) return null;
 
-    const { candles15m, candles1h } = context;
+    const { candles15m, candles1h, candles4h } = context;
     if (candles15m.length < 60 || candles1h.length < 60) return null;
 
     const closes15m = candles15m.map((c) => c.close);
     const closes1h = candles1h.map((c) => c.close);
-    const currentPrice = closes15m.at(-1) ?? 0;
-    const lastCandle = candles15m.at(-1);
-    const prevCandle = candles15m.at(-2);
-    if (!lastCandle || !prevCandle) return null;
+    const currentPrice = closes15m[closes15m.length - 1] ?? 0;
+    const lastCandle = candles15m[candles15m.length - 1];
+    const prevCandle = candles15m[candles15m.length - 2];
+    const prev2Candle = candles15m[candles15m.length - 3];
+    if (!lastCandle || !prevCandle || !prev2Candle) return null;
 
     const htfTrend = detectTrend(candles1h);
     if (htfTrend === 'sideways') return null;
 
+    // 4h alignment (Elder Triple Screen — only enter with 4h backing)
+    const htf4Trend = candles4h && candles4h.length >= 50 ? detectTrend(candles4h) : null;
+    if (htf4Trend !== null && htf4Trend !== htfTrend && htf4Trend !== 'sideways') return null;
+
     const ema20arr = ema(closes15m, 20);
     const ema50arr = ema(closes15m, 50);
-    const ema20 = ema20arr.at(-1) ?? currentPrice;
-    const ema50 = ema50arr.at(-1) ?? currentPrice;
-    const ema20Prev = ema20arr.at(-2) ?? ema20;
-    const ema50Prev = ema50arr.at(-2) ?? ema50;
+    const ema20 = ema20arr[ema20arr.length - 1] ?? currentPrice;
+    const ema50 = ema50arr[ema50arr.length - 1] ?? currentPrice;
+    const ema20Prev = ema20arr[ema20arr.length - 2] ?? ema20;
+    const ema50Prev = ema50arr[ema50arr.length - 2] ?? ema50;
     const atr14 = atr(candles15m, 14);
-    const currentRsi = rsi(closes15m, 14).at(-1) ?? 50;
-    const ema20_1h = ema(closes1h, 20).at(-1) ?? currentPrice;
-    const ema50_1h = ema(closes1h, 50).at(-1) ?? currentPrice;
+    const rsiValues = rsi(closes15m, 14);
+    const currentRsi = rsiValues[rsiValues.length - 1] ?? 50;
+    const ema20_1h = ema(closes1h, 20)[closes1h.length - 1] ?? currentPrice;
+    const ema50_1h = ema(closes1h, 50)[closes1h.length - 1] ?? currentPrice;
     const volumes15m = candles15m.map((c) => c.volume);
     const avgVolume = volumeAverage(volumes15m, 20);
-    const volumeRatio = volumeSpike(volumes15m.at(-1) ?? 0, avgVolume);
+    const volumeRatio = volumeSpike(volumes15m[volumes15m.length - 1] ?? 0, avgVolume);
 
     if (atr14 <= 0) return null;
     if (context.hotScore < cfg.minHotScore || context.spread > 0.5) return null;
@@ -54,6 +63,24 @@ export class PullbackContinuationStrategy implements TradingStrategy {
     const lastCandleRange = Math.max(lastCandle.high - lastCandle.low, atr14 * 0.1);
     const candleBodyRatio = lastCandleBody / lastCandleRange;
 
+    // Candlestick patterns on the reclaim candle (Steve Nison / Al Brooks)
+    const patterns = detectCandlePatterns(candles15m);
+
+    // RSI divergence check (Alexander Elder — confirms pullback is not a reversal)
+    const divergence = detectRsiDivergence(closes15m, rsiValues);
+
+    // Order blocks on 15m (ICT — institutional re-entry zones)
+    const obs = detectOrderBlocks(candles15m);
+
+    // Session bonus
+    const sessionAdj = sessionScoreAdjustment();
+
+    // Two-legged pullback detection (Al Brooks — a-b-c structure is more reliable)
+    // The pullback has two distinct legs if prev2 low was above prevCandle low for LONG
+    // (price went lower in two steps, now reclaiming — cleaner setup)
+    const twoLeggedPullbackLong = prev2Candle.low > prevCandle.low && prevCandle.low <= ema20 + atr14 * 0.3;
+    const twoLeggedPullbackShort = prev2Candle.high < prevCandle.high && prevCandle.high >= ema20 - atr14 * 0.3;
+
     const bullishStructure =
       ema20 > ema50 &&
       ema20 > ema20Prev &&
@@ -65,6 +92,7 @@ export class PullbackContinuationStrategy implements TradingStrategy {
       ema50 <= ema50Prev &&
       ema20_1h < ema50_1h;
 
+    // ── LONG ──────────────────────────────────────────────────────────────────
     if (
       htfTrend === 'bullish' &&
       bullishStructure &&
@@ -82,8 +110,13 @@ export class PullbackContinuationStrategy implements TradingStrategy {
       candleBodyRatio >= 0.5 &&
       volumeRatio >= 0.9 &&
       context.marketRegime.regime !== 'bearish' &&
-      context.marketRegime.regime !== 'no_trade'
+      context.marketRegime.regime !== 'no_trade' &&
+      // Require a bullish confirmation: formal pattern OR body that dominates the range
+      (patterns.pinBarBullish || patterns.hammer || patterns.bullishEngulfing || patterns.bullishMarubozu || candleBodyRatio >= 0.55)
     ) {
+      // Reject if RSI bearish divergence is present (price continuing higher but RSI not)
+      if (divergence.bearishDivergence) return null;
+
       const swingLow = Math.min(...candles15m.slice(-6).map((c) => c.low));
       const stopLoss = Math.min(swingLow - atr14 * 0.2, ema50 - atr14 * 0.25);
       const risk = currentPrice - stopLoss;
@@ -93,6 +126,12 @@ export class PullbackContinuationStrategy implements TradingStrategy {
       const takeProfit2 = currentPrice + risk * 2.5;
       const riskReward = (takeProfit1 - currentPrice) / risk;
       if (riskReward + 1e-6 < context.minRiskReward) return null;
+
+      const nearBullOb = priceNearOrderBlock(currentPrice, obs.filter((ob) => ob.type === 'bullish'), atr14);
+      const obBonus = nearBullOb ? 5 : 0;
+      const twoLegBonus = twoLeggedPullbackLong ? 4 : 0;
+      const patternBonus = patterns.bullishEngulfing ? 5 : patterns.pinBarBullish || patterns.hammer ? 3 : 0;
+      const divergenceBonus = divergence.bullishDivergence ? 3 : 0;
 
       return {
         symbol: context.symbol,
@@ -109,18 +148,25 @@ export class PullbackContinuationStrategy implements TradingStrategy {
           candleBodyRatio,
           rsi: currentRsi,
           pullbackDistanceAtr: pullbackDistance / atr14,
+          bonuses: obBonus + twoLegBonus + patternBonus + divergenceBonus + sessionAdj,
         }),
         reasonList: [
           'Bullish 1h structure aligned above EMA20/EMA50',
           `Pullback tagged 15m EMA20 (${ema20.toFixed(4)}) and reclaimed with a strong close`,
-          `RSI ${currentRsi.toFixed(1)} stayed in the continuation pocket after the dip`,
-          `15m trend strength ${trendStrengthAtr.toFixed(2)} ATR with candle body ratio ${candleBodyRatio.toFixed(2)}`,
-          `Participation confirmed with ${volumeRatio.toFixed(1)}x relative volume on reclaim`,
+          `RSI ${currentRsi.toFixed(1)} in continuation pocket${divergence.bullishDivergence ? ' + bullish divergence' : ''}`,
+          `Candle: ${patterns.bullishEngulfing ? 'engulfing' : patterns.pinBarBullish ? 'pin bar' : patterns.hammer ? 'hammer' : 'strong body'} — ${candleBodyRatio.toFixed(2)} ratio`,
+          `Volume ${volumeRatio.toFixed(1)}x${twoLeggedPullbackLong ? ' | two-legged pullback' : ''}${nearBullOb ? ' | near OB' : ''}`,
+          ...(htf4Trend ? [`4h trend: ${htf4Trend}`] : []),
         ],
-        invalidationRules: ['15m close back below EMA20', '1h EMA20 loses EMA50', `RSI drops below ${cfg.rsiLongMin - 3}`],
+        invalidationRules: [
+          '15m close back below EMA20',
+          '1h EMA20 loses EMA50',
+          `RSI drops below ${cfg.rsiLongMin - 3}`,
+        ],
       };
     }
 
+    // ── SHORT ─────────────────────────────────────────────────────────────────
     if (
       htfTrend === 'bearish' &&
       bearishStructure &&
@@ -138,8 +184,11 @@ export class PullbackContinuationStrategy implements TradingStrategy {
       candleBodyRatio >= 0.5 &&
       volumeRatio >= 0.9 &&
       context.marketRegime.regime !== 'bullish' &&
-      context.marketRegime.regime !== 'no_trade'
+      context.marketRegime.regime !== 'no_trade' &&
+      (patterns.pinBarBearish || patterns.shootingStar || patterns.bearishEngulfing || patterns.bearishMarubozu || candleBodyRatio >= 0.65)
     ) {
+      if (divergence.bullishDivergence) return null;
+
       const swingHigh = Math.max(...candles15m.slice(-6).map((c) => c.high));
       const stopLoss = Math.max(swingHigh + atr14 * 0.2, ema50 + atr14 * 0.25);
       const risk = stopLoss - currentPrice;
@@ -149,6 +198,12 @@ export class PullbackContinuationStrategy implements TradingStrategy {
       const takeProfit2 = currentPrice - risk * 2.5;
       const riskReward = (currentPrice - takeProfit1) / risk;
       if (riskReward + 1e-6 < context.minRiskReward) return null;
+
+      const nearBearOb = priceNearOrderBlock(currentPrice, obs.filter((ob) => ob.type === 'bearish'), atr14);
+      const obBonus = nearBearOb ? 5 : 0;
+      const twoLegBonus = twoLeggedPullbackShort ? 4 : 0;
+      const patternBonus = patterns.bearishEngulfing ? 5 : patterns.pinBarBearish || patterns.shootingStar ? 3 : 0;
+      const divergenceBonus = divergence.bearishDivergence ? 3 : 0;
 
       return {
         symbol: context.symbol,
@@ -165,15 +220,21 @@ export class PullbackContinuationStrategy implements TradingStrategy {
           candleBodyRatio,
           rsi: 100 - currentRsi,
           pullbackDistanceAtr: pullbackDistance / atr14,
+          bonuses: obBonus + twoLegBonus + patternBonus + divergenceBonus + sessionAdj,
         }),
         reasonList: [
           'Bearish 1h structure aligned below EMA20/EMA50',
           `Pullback tagged 15m EMA20 (${ema20.toFixed(4)}) and rejected with a strong close`,
-          `RSI ${currentRsi.toFixed(1)} stayed in the continuation pocket after the bounce`,
-          `15m trend strength ${trendStrengthAtr.toFixed(2)} ATR with candle body ratio ${candleBodyRatio.toFixed(2)}`,
-          `Participation confirmed with ${volumeRatio.toFixed(1)}x relative volume on rejection`,
+          `RSI ${currentRsi.toFixed(1)} in continuation pocket${divergence.bearishDivergence ? ' + bearish divergence' : ''}`,
+          `Candle: ${patterns.bearishEngulfing ? 'engulfing' : patterns.pinBarBearish ? 'pin bar' : patterns.shootingStar ? 'shooting star' : 'strong body'} — ${candleBodyRatio.toFixed(2)} ratio`,
+          `Volume ${volumeRatio.toFixed(1)}x${twoLeggedPullbackShort ? ' | two-legged pullback' : ''}${nearBearOb ? ' | near OB' : ''}`,
+          ...(htf4Trend ? [`4h trend: ${htf4Trend}`] : []),
         ],
-        invalidationRules: ['15m close back above EMA20', '1h EMA20 reclaims EMA50', `RSI breaks above ${cfg.rsiShortMax + 3}`],
+        invalidationRules: [
+          '15m close back above EMA20',
+          '1h EMA20 reclaims EMA50',
+          `RSI breaks above ${cfg.rsiShortMax + 3}`,
+        ],
       };
     }
 
@@ -187,6 +248,7 @@ function scorePullbackSetup(input: {
   candleBodyRatio: number;
   rsi: number;
   pullbackDistanceAtr: number;
+  bonuses: number;
 }): number {
   const trendBonus = Math.min(8, Math.max(0, (input.trendStrengthAtr - 0.18) * 12));
   const candleBonus = Math.min(7, Math.max(0, (input.candleBodyRatio - 0.45) * 20));
@@ -194,5 +256,7 @@ function scorePullbackSetup(input: {
   const pullbackBonus = Math.max(0, 5 - Math.abs(input.pullbackDistanceAtr - 0.35) * 8);
   const hotScoreBonus = Math.max(0, Math.min(4, (input.hotScore - 55) / 10));
 
-  return Math.round(clamp(74 + trendBonus + candleBonus + rsiBonus + pullbackBonus + hotScoreBonus, 74, 94));
+  return Math.round(
+    clamp(74 + trendBonus + candleBonus + rsiBonus + pullbackBonus + hotScoreBonus + input.bonuses, 74, 99),
+  );
 }

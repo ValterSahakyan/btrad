@@ -54,7 +54,8 @@
       "Bash(node dist/main.js)",
       "Bash(git status *)",
       "Bash(git commit -m ' *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(npx jest *)"
     ]
   }
 }

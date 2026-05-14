@@ -90,7 +90,7 @@ export class ScannerService {
 
     const maxSymbols = settings?.maxSymbolsPerScan ?? 50;
     const minHotScore = settings?.minHotScoreForScan ?? 45;
-    const strategyHealth = await this.buildStrategyHealthMap();
+    const strategyHealth = await this.buildStrategyHealthMap(settings);
 
     const [enabledSymbols, tickers] = await Promise.all([
       this.prisma.symbol.findMany({ where: { isEnabled: true } }),
@@ -127,9 +127,10 @@ export class ScannerService {
           await this.logsService.info('scanner', 'Scan aborted early: Bot was paused');
           break;
         }
-        const [candles15m, candles1h, fundingRate, openInterest] = await Promise.all([
+        const [candles15m, candles1h, candles4h, fundingRate, openInterest] = await Promise.all([
           this.binanceService.fetchKlines({ symbol: symbolRecord.symbol, interval: '15m', limit: 200 }),
           this.binanceService.fetchKlines({ symbol: symbolRecord.symbol, interval: '1h', limit: 200 }),
+          this.binanceService.fetchKlines({ symbol: symbolRecord.symbol, interval: '4h', limit: 100 }),
           this.binanceService.fetchFundingRate(symbolRecord.symbol),
           this.binanceService.fetchOpenInterest(symbolRecord.symbol),
         ]);
@@ -176,6 +177,7 @@ export class ScannerService {
           symbol: symbolRecord.symbol,
           candles15m,
           candles1h,
+          candles4h,
           hotScore,
           spread,
           marketRegime: regime,
@@ -216,7 +218,7 @@ export class ScannerService {
 
           let effectiveStopLoss = candidate.stopLoss;
           if (settings?.fixedRoeEnabled) {
-            const feeBps = Number(process.env.ESTIMATED_TAKER_FEE_BPS ?? 4);
+            const feeBps = Number(process.env.ESTIMATED_TAKER_FEE_BPS) || 4;
             const feeRate = feeBps / 10000;
             const leverage = Math.min(settings.maxLeverage ?? 5, settings.defaultLeverage ?? 3);
             effectiveStopLoss = this.calculateFixedRoePrice({
@@ -341,7 +343,7 @@ export class ScannerService {
         let takeProfit2 = candidate.takeProfit2;
 
         if (settings?.fixedRoeEnabled) {
-          const feeBps = Number(process.env.ESTIMATED_TAKER_FEE_BPS ?? 4);
+          const feeBps = Number(process.env.ESTIMATED_TAKER_FEE_BPS) || 4;
           const feeRate = feeBps / 10000;
           const leverage = risk.leverage;
 
@@ -507,7 +509,7 @@ export class ScannerService {
     return { imported };
   }
 
-  private async buildStrategyHealthMap(): Promise<Map<string, StrategyHealth>> {
+  private async buildStrategyHealthMap(settings: Record<string, unknown> | null): Promise<Map<string, StrategyHealth>> {
     const todayStart = new Date();
     todayStart.setUTCHours(0, 0, 0, 0);
 
@@ -538,6 +540,10 @@ export class ScannerService {
       grouped.set(strategy, bucket);
     }
 
+    const s = settings as any;
+    const maxPositionUsd = s?.maxPositionUsd ?? 15;
+    const strategyDrawdownLimit = -(maxPositionUsd * 1.0);
+
     const healthMap = new Map<string, StrategyHealth>();
     for (const [strategy, bucket] of grouped.entries()) {
       const totalPnl = bucket.reduce((sum, trade) => sum + trade.pnl, 0);
@@ -547,7 +553,7 @@ export class ScannerService {
 
       if (effectiveConsecutiveLosses >= 6) {
         blockedReason = '6 consecutive losses today';
-      } else if (bucket.length >= 6 && totalPnl < -2.0) {
+      } else if (bucket.length >= 6 && totalPnl < strategyDrawdownLimit) {
         blockedReason = 'daily strategy drawdown exceeded';
       }
 

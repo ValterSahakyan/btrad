@@ -64,6 +64,8 @@ export interface StrategyContext {
   symbol: string;
   candles15m: Candle[];
   candles1h: Candle[];
+  /** 4-hour candles for higher-timeframe trend bias (Elder Triple Screen / ICT HTF alignment) */
+  candles4h?: Candle[];
   hotScore: number;
   spread: number;
   marketRegime: MarketRegimeResult;

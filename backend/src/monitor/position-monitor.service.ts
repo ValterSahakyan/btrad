@@ -13,6 +13,13 @@ type LiveTradeWithOrders = Prisma.TradeGetPayload<{
   include: { orders: true };
 }>;
 
+type LiveTradeWithSignal = Prisma.TradeGetPayload<{
+  include: {
+    orders: true;
+    signal: { select: { takeProfit1: true } };
+  };
+}>;
+
 @Injectable()
 export class PositionMonitorService implements OnModuleInit {
   private readonly logger = new Logger(PositionMonitorService.name);
@@ -36,6 +43,7 @@ export class PositionMonitorService implements OnModuleInit {
 
     try {
       await this.monitorLiveTrades();
+      await this.trailBreakeven();
       await this.expireStaleSignals();
       await this.refillOpenSlots();
       await this.ensureContinuousLiveFlow();
@@ -125,7 +133,7 @@ export class PositionMonitorService implements OnModuleInit {
         if (dbSymbols.has(pos.symbol)) continue;
 
         const quantity = Math.abs(Number(pos.positionAmt));
-        if (quantity <= 0) continue;
+        if (!Number.isFinite(quantity) || quantity <= 0) continue;
 
         // Skip if a trade was opened by normal execution during this monitor cycle
         const alreadyExists = await this.prisma.trade.findFirst({
@@ -303,6 +311,122 @@ export class PositionMonitorService implements OnModuleInit {
       await this.logsService.warn('monitor', `Failed to close live trade record: ${trade.symbol}`, {
         error: err instanceof Error ? err.message : String(err),
       });
+    }
+  }
+
+  /**
+   * Moves the stop-loss to breakeven once price reaches TP1.
+   *
+   * This is the "let profits run" principle from Van Tharp and Larry Williams:
+   * once the trade is in profit by 1R, lock in breakeven so the worst outcome
+   * becomes a scratch rather than a loss.  This materially improves the
+   * risk-adjusted returns without needing any additional signal logic.
+   */
+  private async trailBreakeven(): Promise<void> {
+    const settings = await this.prisma.botSettings.findFirst();
+    if (settings?.mode !== 'live') return;
+
+    const openTrades = await this.prisma.trade.findMany({
+      where: { status: 'live_open' },
+      include: {
+        orders: true,
+        signal: { select: { takeProfit1: true } },
+      },
+    }) as LiveTradeWithSignal[];
+
+    for (const trade of openTrades) {
+      const tp1 = trade.signal?.takeProfit1;
+      if (!tp1) continue;
+
+      const slOrders = trade.orders.filter((o) => o.type === 'STOP_MARKET');
+
+      // Already moved to breakeven if any SL is on the profitable side of entry
+      const breakevenAlreadySet = slOrders.some((o) => {
+        const slPrice = o.price ?? 0;
+        if (trade.direction === 'LONG') return slPrice >= trade.entryPrice * 0.999;
+        return slPrice > 0 && slPrice <= trade.entryPrice * 1.001;
+      });
+      if (breakevenAlreadySet) continue;
+
+      // Fetch current mark price (safe: live endpoint)
+      const markPrice = await this.binanceService.fetchMarkPrice(trade.symbol).catch(() => null);
+      if (markPrice === null) continue;
+
+      const tp1Reached =
+        trade.direction === 'LONG' ? markPrice >= tp1 : markPrice <= tp1;
+      if (!tp1Reached) continue;
+
+      // Find the open SL order
+      const openSl = slOrders.find((o) => o.status === 'open' && o.binanceOrderId);
+      if (!openSl?.binanceOrderId) continue;
+
+      try {
+        // Look up symbol precision for rounding
+        const sym = await this.prisma.symbol.findFirst({ where: { symbol: trade.symbol } });
+        const pricePrecision = sym?.pricePrecision ?? 4;
+
+        // Breakeven = entry + tiny buffer (covers maker fee ~0.02%)
+        const bePrice = Number(
+          (trade.direction === 'LONG'
+            ? trade.entryPrice * 1.0003
+            : trade.entryPrice * 0.9997
+          ).toFixed(pricePrecision),
+        );
+
+        // Cancel the existing SL
+        await this.binanceService.cancelAlgoOrder(openSl.binanceOrderId).catch(async (err) => {
+          await this.logsService.warn('monitor', `Breakeven: failed to cancel old SL for ${trade.symbol}`, {
+            tradeId: trade.id,
+            binanceOrderId: openSl.binanceOrderId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+          throw err;
+        });
+
+        await this.prisma.order.update({
+          where: { id: openSl.id },
+          data: { status: 'cancelled' },
+        });
+
+        // Place new SL at breakeven
+        const side = trade.direction === 'LONG' ? 'SELL' : 'BUY';
+        const ts = Date.now();
+        const newSlResult = await this.binanceService.placeOrder({
+          symbol: trade.symbol,
+          side,
+          type: 'STOP_MARKET',
+          quantity: trade.quantity,
+          stopPrice: bePrice,
+          reduceOnly: true,
+          clientOrderId: `${trade.id.slice(0, 8)}-be-${ts}`,
+        });
+
+        await this.prisma.order.create({
+          data: {
+            tradeId: trade.id,
+            binanceOrderId: String(newSlResult.orderId),
+            symbol: trade.symbol,
+            side,
+            type: 'STOP_MARKET',
+            quantity: trade.quantity,
+            price: bePrice,
+            status: 'open',
+            rawResponseJson: newSlResult as unknown as Prisma.InputJsonValue,
+          },
+        });
+
+        await this.logsService.info('monitor', 'Stop-loss moved to breakeven after TP1 reached', {
+          tradeId: trade.id,
+          symbol: trade.symbol,
+          direction: trade.direction,
+          entryPrice: trade.entryPrice,
+          tp1,
+          markPrice,
+          newSlPrice: bePrice,
+        });
+      } catch {
+        // Non-critical — SL stays where it was; monitor will retry next cycle
+      }
     }
   }
 

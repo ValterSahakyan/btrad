@@ -1,3 +1,53 @@
+/**
+ * Detects RSI divergence between price and momentum.
+ *
+ * Bullish divergence: price makes a new low but RSI makes a higher low — selling
+ * momentum is weakening, reversal up is likely.
+ * Bearish divergence: price makes a new high but RSI makes a lower high — buying
+ * momentum is fading, reversal down is likely.
+ *
+ * Source: Alexander Elder "Trading for a Living", John Murphy "Technical Analysis".
+ */
+export function detectRsiDivergence(
+  prices: number[],
+  rsiValues: number[],
+  lookback = 20,
+): { bullishDivergence: boolean; bearishDivergence: boolean } {
+  const n = Math.min(prices.length, rsiValues.length, lookback);
+  if (n < 10) return { bullishDivergence: false, bearishDivergence: false };
+
+  const priceSlice = prices.slice(-n);
+  const rsiSlice = rsiValues.slice(-n);
+
+  const currentPrice = priceSlice[n - 1];
+  const currentRsi = rsiSlice[n - 1];
+
+  // Use the first 70% of the window as the reference period
+  const refEnd = Math.max(5, Math.floor(n * 0.7));
+
+  let minPriceIdx = 0;
+  let maxPriceIdx = 0;
+  for (let i = 1; i < refEnd; i++) {
+    if (priceSlice[i] < priceSlice[minPriceIdx]) minPriceIdx = i;
+    if (priceSlice[i] > priceSlice[maxPriceIdx]) maxPriceIdx = i;
+  }
+
+  const prevLowPrice = priceSlice[minPriceIdx];
+  const prevLowRsi = rsiSlice[minPriceIdx];
+  const prevHighPrice = priceSlice[maxPriceIdx];
+  const prevHighRsi = rsiSlice[maxPriceIdx];
+
+  // Bullish: price at/below previous low AND RSI is notably higher
+  const bullishDivergence =
+    currentPrice <= prevLowPrice * 1.003 && currentRsi > prevLowRsi + 4;
+
+  // Bearish: price at/above previous high AND RSI is notably lower
+  const bearishDivergence =
+    currentPrice >= prevHighPrice * 0.997 && currentRsi < prevHighRsi - 4;
+
+  return { bullishDivergence, bearishDivergence };
+}
+
 export const rsi = (values: number[], period = 14): number[] => {
   if (values.length <= period) {
     return [];
