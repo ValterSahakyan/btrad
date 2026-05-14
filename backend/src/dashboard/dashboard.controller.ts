@@ -259,11 +259,20 @@ export class DashboardController {
   @Post('/bot/stop')
   async stopBot(@Req() request: Request) {
     const settings = await this.getSettings();
-    const updated = await this.prisma.botSettings.update({ where: { id: settings.id }, data: { isPaused: true } });
-    await this.logsService.audit('bot.stopped', getActor(request), {});
+    const [updated, cancelled] = await Promise.all([
+      this.prisma.botSettings.update({ where: { id: settings.id }, data: { isPaused: true } }),
+      // Expire all queued signals so nothing executes when the bot is resumed.
+      // 'approved' signals are intentionally excluded — they are mid-execution and
+      // cancelling them there could leave an unprotected open position on Binance.
+      this.prisma.signal.updateMany({
+        where: { status: { in: ['active', 'pending'] } },
+        data: { status: 'expired' },
+      }),
+    ]);
+    await this.logsService.audit('bot.stopped', getActor(request), { signalsCancelled: cancelled.count });
     return {
       ...serializeSettings(updated),
-      message: 'Bot stopped. Existing live trades will still be monitored.',
+      message: `Bot stopped. ${cancelled.count} pending signal${cancelled.count !== 1 ? 's' : ''} cancelled. Existing live trades will still be monitored.`,
     };
   }
 

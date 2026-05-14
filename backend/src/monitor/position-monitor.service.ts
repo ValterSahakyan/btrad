@@ -93,7 +93,7 @@ export class PositionMonitorService implements OnModuleInit {
     // Only reconcile when actually in live mode; signed requests go to testnet
     // otherwise, which would return 0 positions and incorrectly close live DB
     // records.
-    const settings = (await this.prisma.botSettings.findFirst()) as ({ maxHoldingHours?: number; mode?: string } | null);
+    const settings = (await this.prisma.botSettings.findFirst()) as ({ maxHoldingHours?: number; mode?: string; isPaused?: boolean } | null);
     if (settings?.mode !== 'live') return;
 
     const openLiveTrades = await this.prisma.trade.findMany({
@@ -102,8 +102,10 @@ export class PositionMonitorService implements OnModuleInit {
     });
     if (openLiveTrades.length === 0) return;
 
+    // Only enforce the time-stop when the bot is running — pausing should not
+    // trigger active Binance order placement (closing a position IS trading).
     const maxHoldingHours = settings.maxHoldingHours ?? 0;
-    if (maxHoldingHours > 0) {
+    if (maxHoldingHours > 0 && !settings.isPaused) {
       for (const trade of openLiveTrades) {
         if (!this.isTradeTimedOut(trade, maxHoldingHours)) continue;
         await this.closeTimedOutTrade(trade, maxHoldingHours);
@@ -325,6 +327,8 @@ export class PositionMonitorService implements OnModuleInit {
   private async trailBreakeven(): Promise<void> {
     const settings = await this.prisma.botSettings.findFirst();
     if (settings?.mode !== 'live') return;
+    // Moving an SL on Binance is active order placement — skip while paused.
+    if (settings?.isPaused) return;
 
     const openTrades = await this.prisma.trade.findMany({
       where: { status: 'live_open' },

@@ -423,7 +423,10 @@ export class ScannerService {
 
         const autoExecute = settings?.requireDashboardConfirmation === false;
 
-        if (autoExecute) {
+        // Re-check isPaused using the freshSettings read at the top of this iteration.
+        // Closes the window between the per-symbol pause check and signal creation.
+        // approveLive() also checks, but preventing the call entirely is cleaner.
+        if (autoExecute && !freshSettings?.isPaused) {
           void this.autoExecute(signal.id).catch(async (err: unknown) => {
             await this.logsService.error('scanner', `Auto-execute failed for ${symbolRecord.symbol}`, {
               signalId: signal.id,
