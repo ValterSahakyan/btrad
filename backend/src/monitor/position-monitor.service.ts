@@ -100,44 +100,42 @@ export class PositionMonitorService implements OnModuleInit {
       where: { status: 'live_open' },
       include: { orders: true },
     });
-    if (openLiveTrades.length === 0) return;
 
-    // Only enforce the time-stop when the bot is running — pausing should not
-    // trigger active Binance order placement (closing a position IS trading).
-    const maxHoldingHours = settings.maxHoldingHours ?? 0;
-    if (maxHoldingHours > 0 && !settings.isPaused) {
-      for (const trade of openLiveTrades) {
-        if (!this.isTradeTimedOut(trade, maxHoldingHours)) continue;
-        await this.closeTimedOutTrade(trade, maxHoldingHours);
+    // Enforce time-stop on known DB trades (skip if DB is empty — nothing to enforce).
+    if (openLiveTrades.length > 0) {
+      const maxHoldingHours = settings.maxHoldingHours ?? 0;
+      if (maxHoldingHours > 0 && !settings.isPaused) {
+        for (const trade of openLiveTrades) {
+          if (!this.isTradeTimedOut(trade, maxHoldingHours)) continue;
+          await this.closeTimedOutTrade(trade, maxHoldingHours);
+        }
       }
     }
 
-    const remainingOpenLiveTrades = await this.prisma.trade.findMany({
-      where: { status: 'live_open' },
-    });
-    if (remainingOpenLiveTrades.length === 0) return;
-
+    // Always reconcile with Binance — even if the DB is empty we still need
+    // to import any positions that exist on the exchange without a DB record.
     try {
       const binancePositions = await this.binanceService.fetchOpenPositions();
       const activeSymbols = new Set(binancePositions.map((p) => p.symbol));
 
-      for (const trade of remainingOpenLiveTrades) {
+      // Re-fetch after time-stop closures so dbSymbols reflects current state.
+      const currentDbTrades = await this.prisma.trade.findMany({ where: { status: 'live_open' } });
+      const dbSymbols = new Set(currentDbTrades.map((t) => t.symbol));
+
+      // Close DB trades that disappeared from the exchange.
+      for (const trade of currentDbTrades) {
         if (activeSymbols.has(trade.symbol)) continue;
         await this.finalizeExchangeClosedTrade(trade);
       }
 
-      // Import orphan trades — positions on Binance with no matching DB record.
-      // These are externally-opened positions (manual trades, other bots, etc.)
-      // that the bot did not open. They are imported so the position monitor can
-      // track and close them, but they carry no signal or strategy metadata.
-      const dbSymbols = new Set(openLiveTrades.map((t) => t.symbol));
+      // Import orphan positions — Binance positions with no matching DB record.
+      // Handles: externally-opened positions, DB records lost due to errors, etc.
       for (const pos of binancePositions) {
         if (dbSymbols.has(pos.symbol)) continue;
 
         const quantity = Math.abs(Number(pos.positionAmt));
         if (!Number.isFinite(quantity) || quantity <= 0) continue;
 
-        // Skip if a trade was opened by normal execution during this monitor cycle
         const alreadyExists = await this.prisma.trade.findFirst({
           where: { symbol: pos.symbol, status: 'live_open' },
         });
@@ -162,7 +160,7 @@ export class PositionMonitorService implements OnModuleInit {
 
         await this.logsService.risk(
           'orphan_position_imported',
-          `Orphan position imported: ${pos.symbol} — opened outside the bot (manual trade or external tool). No signal or strategy attached.`,
+          `Orphan position imported: ${pos.symbol} — no DB record found (lost on crash or opened externally).`,
           'high',
           { symbol: pos.symbol, quantity, entryPrice, leverage },
         );

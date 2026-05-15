@@ -293,7 +293,7 @@ export default function TradesPage() {
                             </button>
                           )}
                           {isLive && t.orphanedFromDb && (
-                            <span className="text-[11px] text-dim italic">manual</span>
+                            <span className="text-[11px] text-warning italic" title="Position exists on Binance but has no bot DB record — will be imported automatically">untracked</span>
                           )}
                         </td>
                       </tr>
