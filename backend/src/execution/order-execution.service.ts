@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { BinanceService } from '../binance/binance.service';
+import { BinanceOrderResult } from '../binance/binance.types';
 import { LogsService } from '../logs/logs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { applyWeekendOverrides } from '../settings/weekend-settings';
@@ -274,40 +275,122 @@ export class OrderExecutionService {
     // ── Take-profit TAKE_PROFIT_MARKET ───────────────────────────────────────
     // Non-critical: SL already protects downside. TP failure means position
     // stays open until monitor closes it or user closes manually.
-    const tpResult = await this.binanceService
-      .placeOrder({
-        symbol: sym.symbol,
-        side: closeSide,
-        type: 'TAKE_PROFIT_MARKET',
-        quantity,
-        stopPrice: Number(signal.takeProfit2.toFixed(sym.pricePrecision)),
-        reduceOnly: true,
-        clientOrderId: `${idPrefix}-tp-${ts}-${rand}`,
-      })
-      .catch(async (err) => {
-        await this.logsService.warn('execution', 'TP order failed — position protected by SL only', {
-          symbol: sym.symbol,
-          error: err instanceof Error ? err.message : String(err),
-          signalId,
-          tradeId: trade.id,
-        });
-        return null;
-      });
+    // Split into two half-qty orders: TP1 locks in profit, TP2 captures full move.
+    // Binance reduceOnly auto-adjusts qty down if position is already partially closed.
+    const halfQty = Math.floor(quantity / 2 / sym.stepSize) * sym.stepSize;
 
-    if (tpResult) {
-      await this.prisma.order.create({
-        data: {
-          tradeId: trade.id,
-          binanceOrderId: String(tpResult.orderId),
+    let tp1Result: BinanceOrderResult | null = null;
+    let tp2Result: BinanceOrderResult | null = null;
+
+    if (halfQty > 0) {
+      tp1Result = await this.binanceService
+        .placeOrder({
+          symbol: sym.symbol,
+          side: closeSide,
+          type: 'TAKE_PROFIT_MARKET',
+          quantity: halfQty,
+          stopPrice: Number(signal.takeProfit1.toFixed(sym.pricePrecision)),
+          reduceOnly: true,
+          clientOrderId: `${idPrefix}-tp1-${ts}-${rand}`,
+        })
+        .catch(async (err) => {
+          await this.logsService.warn('execution', 'TP1 order failed — position protected by SL only', {
+            symbol: sym.symbol,
+            error: err instanceof Error ? err.message : String(err),
+            signalId,
+            tradeId: trade.id,
+          });
+          return null;
+        });
+
+      if (tp1Result) {
+        await this.prisma.order.create({
+          data: {
+            tradeId: trade.id,
+            binanceOrderId: String(tp1Result.orderId),
+            symbol: sym.symbol,
+            side: closeSide,
+            type: 'TAKE_PROFIT_MARKET',
+            quantity: halfQty,
+            price: signal.takeProfit1,
+            status: 'open',
+            rawResponseJson: tp1Result as unknown as Prisma.InputJsonValue,
+          },
+        });
+      }
+
+      tp2Result = await this.binanceService
+        .placeOrder({
+          symbol: sym.symbol,
+          side: closeSide,
+          type: 'TAKE_PROFIT_MARKET',
+          quantity: halfQty,
+          stopPrice: Number(signal.takeProfit2.toFixed(sym.pricePrecision)),
+          reduceOnly: true,
+          clientOrderId: `${idPrefix}-tp2-${ts}-${rand}`,
+        })
+        .catch(async (err) => {
+          await this.logsService.warn('execution', 'TP2 order failed — position protected by SL only', {
+            symbol: sym.symbol,
+            error: err instanceof Error ? err.message : String(err),
+            signalId,
+            tradeId: trade.id,
+          });
+          return null;
+        });
+
+      if (tp2Result) {
+        await this.prisma.order.create({
+          data: {
+            tradeId: trade.id,
+            binanceOrderId: String(tp2Result.orderId),
+            symbol: sym.symbol,
+            side: closeSide,
+            type: 'TAKE_PROFIT_MARKET',
+            quantity: halfQty,
+            price: signal.takeProfit2,
+            status: 'open',
+            rawResponseJson: tp2Result as unknown as Prisma.InputJsonValue,
+          },
+        });
+      }
+    } else {
+      // Quantity too small to split — fall back to single full-qty TP2 order
+      tp2Result = await this.binanceService
+        .placeOrder({
           symbol: sym.symbol,
           side: closeSide,
           type: 'TAKE_PROFIT_MARKET',
           quantity,
-          price: signal.takeProfit2,
-          status: 'open',
-          rawResponseJson: tpResult as unknown as Prisma.InputJsonValue,
-        },
-      });
+          stopPrice: Number(signal.takeProfit2.toFixed(sym.pricePrecision)),
+          reduceOnly: true,
+          clientOrderId: `${idPrefix}-tp2-${ts}-${rand}`,
+        })
+        .catch(async (err) => {
+          await this.logsService.warn('execution', 'TP order failed — position protected by SL only', {
+            symbol: sym.symbol,
+            error: err instanceof Error ? err.message : String(err),
+            signalId,
+            tradeId: trade.id,
+          });
+          return null;
+        });
+
+      if (tp2Result) {
+        await this.prisma.order.create({
+          data: {
+            tradeId: trade.id,
+            binanceOrderId: String(tp2Result.orderId),
+            symbol: sym.symbol,
+            side: closeSide,
+            type: 'TAKE_PROFIT_MARKET',
+            quantity,
+            price: signal.takeProfit2,
+            status: 'open',
+            rawResponseJson: tp2Result as unknown as Prisma.InputJsonValue,
+          },
+        });
+      }
     }
 
     // Signal marked executed only after all orders are placed
@@ -324,9 +407,11 @@ export class OrderExecutionService {
       fillPrice,
       actualMargin,
       stopLoss: signal.stopLoss,
+      takeProfit1: signal.takeProfit1,
       takeProfit2: signal.takeProfit2,
       slOrderId: slResult.orderId,
-      tpOrderId: tpResult?.orderId ?? null,
+      tp1OrderId: tp1Result?.orderId ?? null,
+      tp2OrderId: tp2Result?.orderId ?? null,
     });
     await this.logsService.audit('trade.open_live', actor, {
       signalId,

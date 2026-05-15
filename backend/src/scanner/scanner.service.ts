@@ -187,6 +187,13 @@ export class ScannerService {
           continue;
         }
 
+        // Skip coins with insufficient volatility — fees exceed the expected move
+        // Skip coins too volatile — stop distance becomes too wide for any R/R to work
+        if (volatility < 0.25 || volatility > 4.0) {
+          filteredPreCandidate += 1;
+          continue;
+        }
+
         const strategyConfig = buildStrategyConfig(settings);
 
         const candidates = this.strategySelectorService.evaluateAll({
@@ -222,6 +229,20 @@ export class ScannerService {
             strategyBlockedCounts.set(candidate.strategy, (strategyBlockedCounts.get(candidate.strategy) ?? 0) + 1);
             continue;
           }
+
+          // Skip crowded trades: high positive funding means longs pay shorts (too many longs already).
+          // High negative funding means shorts pay longs (too many shorts already).
+          if (fundingRate > 0.0005 && candidate.direction === 'LONG') {
+            const reason = `Funding rate too high for LONG (${(fundingRate * 100).toFixed(3)}%)`;
+            riskReasonCounts.set(reason, (riskReasonCounts.get(reason) ?? 0) + 1);
+            continue;
+          }
+          if (fundingRate < -0.0005 && candidate.direction === 'SHORT') {
+            const reason = `Funding rate too negative for SHORT (${(fundingRate * 100).toFixed(3)}%)`;
+            riskReasonCounts.set(reason, (riskReasonCounts.get(reason) ?? 0) + 1);
+            continue;
+          }
+
           hadUnblockedCandidate = true;
 
           const provisionalConfidence = this.confidenceScoreService.calculate({
