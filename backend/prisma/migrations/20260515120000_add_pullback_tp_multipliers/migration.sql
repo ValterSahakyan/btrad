@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "BotSettings" ADD COLUMN "pullbackTp1Multiplier" DOUBLE PRECISION NOT NULL DEFAULT 1.5;
+ALTER TABLE "BotSettings" ADD COLUMN "pullbackTp2Multiplier" DOUBLE PRECISION NOT NULL DEFAULT 2.5;

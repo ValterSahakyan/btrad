@@ -32,4 +32,22 @@ describe('PositionSizeService', () => {
     const result = svc.calculate(1000, 1, 100, 100);
     expect(result.quantity).toBe(0);
   });
+
+  it('bumps up one step when floor truncation drops notional below minimum', () => {
+    // ETH-style: entry=$3000, stepSize=0.001, minNotional=$10
+    // minQty = 10/3000 = 0.003333 → floor to stepSize → 0.003 → notional=$9 < $10
+    // Should bump to 0.004 → notional=$12 >= $10
+    const result = svc.calculate(10, 100, 3000, 2970, 0.001, 15, 10);
+    expect(result.quantity * 3000).toBeGreaterThanOrEqual(10);
+    expect(result.quantity * 3000).toBeLessThanOrEqual(15);
+  });
+
+  it('stays within [min, max] range for any valid setup', () => {
+    const minUsd = 10;
+    const maxUsd = 15;
+    const result = svc.calculate(60, 7, 3000, 2940, 0.001, maxUsd, minUsd);
+    const notional = result.quantity * 3000;
+    expect(notional).toBeGreaterThanOrEqual(minUsd);
+    expect(notional).toBeLessThanOrEqual(maxUsd + 3000 * 0.001);
+  });
 });

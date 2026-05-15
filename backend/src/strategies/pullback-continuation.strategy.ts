@@ -122,8 +122,8 @@ export class PullbackContinuationStrategy implements TradingStrategy {
       const risk = currentPrice - stopLoss;
       if (risk <= 0 || risk / currentPrice > cfg.maxSlPercent / 100) return null;
 
-      const takeProfit1 = currentPrice + risk * 1.5;
-      const takeProfit2 = currentPrice + risk * 2.5;
+      const takeProfit1 = currentPrice + risk * cfg.tp1Multiplier;
+      const takeProfit2 = currentPrice + risk * cfg.tp2Multiplier;
       const riskReward = (takeProfit1 - currentPrice) / risk;
       if (riskReward + 1e-6 < context.minRiskReward) return null;
 
@@ -185,7 +185,7 @@ export class PullbackContinuationStrategy implements TradingStrategy {
       volumeRatio >= 0.9 &&
       context.marketRegime.regime !== 'bullish' &&
       context.marketRegime.regime !== 'no_trade' &&
-      (patterns.pinBarBearish || patterns.shootingStar || patterns.bearishEngulfing || patterns.bearishMarubozu || candleBodyRatio >= 0.65)
+      (patterns.pinBarBearish || patterns.shootingStar || patterns.bearishEngulfing || patterns.bearishMarubozu || candleBodyRatio >= 0.55)
     ) {
       if (divergence.bullishDivergence) return null;
 
@@ -194,8 +194,8 @@ export class PullbackContinuationStrategy implements TradingStrategy {
       const risk = stopLoss - currentPrice;
       if (risk <= 0 || risk / currentPrice > cfg.maxSlPercent / 100) return null;
 
-      const takeProfit1 = currentPrice - risk * 1.5;
-      const takeProfit2 = currentPrice - risk * 2.5;
+      const takeProfit1 = currentPrice - risk * cfg.tp1Multiplier;
+      const takeProfit2 = currentPrice - risk * cfg.tp2Multiplier;
       const riskReward = (currentPrice - takeProfit1) / risk;
       if (riskReward + 1e-6 < context.minRiskReward) return null;
 

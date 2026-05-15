@@ -44,6 +44,9 @@ export class RiskEngineService {
       },
     });
     const openTrades = openTradeRows.length;
+    const longTradeCount = openTradeRows.filter((t) => t.direction === 'LONG').length;
+    const shortTradeCount = openTradeRows.filter((t) => t.direction === 'SHORT').length;
+    const strategyTradeCount = openTradeRows.filter((t) => t.signal?.strategy === input.strategy).length;
     const todayStart = new Date();
     todayStart.setUTCHours(0, 0, 0, 0);
     const closedTrades: ClosedTradeRow[] = await this.prisma.trade.findMany({
@@ -77,6 +80,9 @@ export class RiskEngineService {
     const minRiskReward = settings?.minRiskReward ?? 1.5;
     const defaultLeverage = settings?.defaultLeverage ?? 3;
     const minPositionUsd = settings?.minPositionUsd ?? 5;
+    const maxLongOpenTrades = settings?.maxLongOpenTrades ?? 0;
+    const maxShortOpenTrades = settings?.maxShortOpenTrades ?? 0;
+    const strategyMaxOpenTrades = resolveStrategyMaxOpenTrades(settings, input.strategy);
 
     const dailyLoss = closedTrades
       .filter((trade) => (trade.pnl ?? 0) < 0)
@@ -102,6 +108,15 @@ export class RiskEngineService {
     const messages: string[] = [];
     if (input.expiresAt.getTime() < Date.now()) messages.push('Signal expired');
     if (openTrades >= maxOpenTrades) messages.push('Max open trades reached');
+    if (maxLongOpenTrades > 0 && input.direction === 'LONG' && longTradeCount >= maxLongOpenTrades) {
+      messages.push('Max long open trades reached');
+    }
+    if (maxShortOpenTrades > 0 && input.direction === 'SHORT' && shortTradeCount >= maxShortOpenTrades) {
+      messages.push('Max short open trades reached');
+    }
+    if (strategyMaxOpenTrades > 0 && strategyTradeCount >= strategyMaxOpenTrades) {
+      messages.push(`Max open trades reached for strategy ${input.strategy}`);
+    }
     if (dailyLossPercent >= maxDailyLossPercent) messages.push('Daily loss limit reached');
     if (effectiveConsecutiveLosses >= maxConsecutiveLosses) messages.push('Max consecutive losses reached');
     if (input.riskReward < minRiskReward) messages.push('Risk reward below minimum');
@@ -129,5 +144,17 @@ export class RiskEngineService {
       riskScore,
       messages,
     };
+  }
+}
+
+function resolveStrategyMaxOpenTrades(settings: unknown, strategy: string): number {
+  const s = settings as any;
+  switch (strategy) {
+    case 'breakout_volume': return s?.breakoutMaxOpenTrades ?? 0;
+    case 'pullback_continuation': return s?.pullbackMaxOpenTrades ?? 0;
+    case 'mean_reversion': return s?.reversionMaxOpenTrades ?? 0;
+    case 'trend_reclaim': return s?.trendReclaimMaxOpenTrades ?? 0;
+    case 'range_bounce': return s?.rangeBounceMaxOpenTrades ?? 0;
+    default: return 0;
   }
 }

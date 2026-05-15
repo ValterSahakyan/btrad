@@ -30,8 +30,20 @@ export class PositionSizeService {
       rawQuantity = Math.min(rawQuantity, maxQty);
     }
 
-    const steps = Math.floor(rawQuantity / stepSize);
-    const quantity = Number((steps * stepSize).toFixed(8));
+    let steps = Math.floor(rawQuantity / stepSize);
+    let quantity = Number((steps * stepSize).toFixed(8));
+
+    // Floor truncation can drop quantity just below minNotional — bump up one step.
+    if (minNotionalUsd > 0 && quantity * entryPrice < minNotionalUsd) {
+      steps += 1;
+      quantity = Number((steps * stepSize).toFixed(8));
+      // Re-apply ceiling if bumping up overshot maxNotional
+      if (maxNotionalUsd > 0 && quantity * entryPrice > maxNotionalUsd) {
+        steps -= 1;
+        quantity = Number((steps * stepSize).toFixed(8));
+      }
+    }
+
     return { riskAmount, stopDistance, quantity };
   }
 }

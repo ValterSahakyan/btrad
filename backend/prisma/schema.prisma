@@ -99,6 +99,8 @@ model BotSettings {
   pullbackAtrMultiplier        Float    @default(1.5)
   pullbackMaxSlPercent         Float    @default(4.0)
   pullbackMinHotScore          Float    @default(40)
+  pullbackTp1Multiplier        Float    @default(1.5)
+  pullbackTp2Multiplier        Float    @default(2.5)
 
   // Strategy: Mean Reversion
   reversionEnabled             Boolean  @default(true)

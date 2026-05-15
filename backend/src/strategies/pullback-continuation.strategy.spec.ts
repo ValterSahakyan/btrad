@@ -40,6 +40,8 @@ describe('PullbackContinuationStrategy', () => {
         atrMultiplier: 1.5,
         maxSlPercent: 4,
         minHotScore: 40,
+        tp1Multiplier: 1.5,
+        tp2Multiplier: 2.5,
       },
       reversion: {
         enabled: true,

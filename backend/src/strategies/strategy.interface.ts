@@ -19,6 +19,8 @@ export interface PullbackConfig {
   atrMultiplier: number;
   maxSlPercent: number;
   minHotScore: number;
+  tp1Multiplier: number;
+  tp2Multiplier: number;
 }
 
 export interface ReversionConfig {

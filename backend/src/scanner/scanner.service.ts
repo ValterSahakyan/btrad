@@ -78,6 +78,22 @@ export class ScannerService {
     if (baseSettings?.isPaused) {
       return { processed: 0, signalsCreated: 0 };
     }
+
+    if (settings?.sessionModeEnabled) {
+      const utcHour = new Date().getUTCHours();
+      const start = settings.tradingWindowStartHourUtc ?? 0;
+      const end = settings.tradingWindowEndHourUtc ?? 24;
+      // Support wrap-around windows (e.g. 22:00–06:00 UTC)
+      const inWindow = start <= end ? utcHour >= start && utcHour < end : utcHour >= start || utcHour < end;
+      if (!inWindow) {
+        await this.logsService.info(
+          'scanner',
+          `Scan skipped: outside trading window ${start}:00–${end}:00 UTC (current: ${utcHour}:00 UTC)`,
+        );
+        return { processed: 0, signalsCreated: 0 };
+      }
+    }
+
     await this.logsService.info('scanner', 'Starting market scan');
     const regime = await this.marketRegimeService.getRegime();
     await this.logsService.info('scanner', `Market regime: ${regime.regime}`, {
@@ -658,6 +674,8 @@ function buildStrategyConfig(settings: Record<string, unknown> | null): Strategy
       atrMultiplier: s?.pullbackAtrMultiplier ?? 1.5,
       maxSlPercent: s?.pullbackMaxSlPercent ?? 4.0,
       minHotScore: s?.pullbackMinHotScore ?? 40,
+      tp1Multiplier: s?.pullbackTp1Multiplier ?? 1.5,
+      tp2Multiplier: s?.pullbackTp2Multiplier ?? 2.5,
     },
     reversion: {
       enabled: s?.reversionEnabled ?? true,
