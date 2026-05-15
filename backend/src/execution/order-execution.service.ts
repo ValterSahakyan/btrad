@@ -52,8 +52,14 @@ export class OrderExecutionService {
 
     const settings = applyWeekendOverrides(await this.prisma.botSettings.findFirst());
     if (settings?.isPaused) {
-      // Cancelled — not reverted to active. A paused bot shouldn't have retriable signals.
-      await this.prisma.signal.update({ where: { id: signalId }, data: { status: 'cancelled' } }).catch(() => null);
+      // Auto-execution: cancel so resume doesn't re-execute this stale signal.
+      // Manual execution: revert to active so the user can retry after unpausing.
+      const isAutoExecute = actor === 'system' || actor === 'system-auto-refill';
+      if (isAutoExecute) {
+        await this.prisma.signal.update({ where: { id: signalId }, data: { status: 'cancelled' } }).catch(() => null);
+      } else {
+        await revertToActive();
+      }
       throw new BadRequestException('Bot is stopped');
     }
     if (!settings?.realTradingEnabled) {
@@ -167,7 +173,12 @@ export class OrderExecutionService {
     // Stop may have fired after the first check. Any call past this line touches Binance.
     const pauseCheck = await this.prisma.botSettings.findFirst();
     if (pauseCheck?.isPaused) {
-      await this.prisma.signal.update({ where: { id: signalId }, data: { status: 'cancelled' } }).catch(() => null);
+      const isAutoExecute = actor === 'system' || actor === 'system-auto-refill';
+      if (isAutoExecute) {
+        await this.prisma.signal.update({ where: { id: signalId }, data: { status: 'cancelled' } }).catch(() => null);
+      } else {
+        await revertToActive();
+      }
       throw new BadRequestException('Bot was stopped before order placement');
     }
 
