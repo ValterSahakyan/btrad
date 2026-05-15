@@ -106,6 +106,13 @@ export class ScannerService {
 
     const maxSymbols = settings?.maxSymbolsPerScan ?? 50;
     const minHotScore = settings?.minHotScoreForScan ?? 45;
+    const effectiveMaxOpenTrades = settings?.maxOpenTrades ?? 2;
+    const currentOpenTradeCount = await this.prisma.trade.count({ where: { status: 'live_open' } });
+    // Cap auto-executes this scan to remaining available slots.
+    // Without this, every void autoExecute fires concurrently and all pass the
+    // maxOpenTrades check before any of them commits a trade row.
+    const autoExecuteSlotsRemaining = Math.max(0, effectiveMaxOpenTrades - currentOpenTradeCount);
+    let autoExecutedThisScan = 0;
     const strategyHealth = await this.buildStrategyHealthMap(settings);
 
     const [enabledSymbols, tickers] = await Promise.all([
@@ -463,7 +470,8 @@ export class ScannerService {
         // Re-check isPaused using the freshSettings read at the top of this iteration.
         // Closes the window between the per-symbol pause check and signal creation.
         // approveLive() also checks, but preventing the call entirely is cleaner.
-        if (autoExecute && !freshSettings?.isPaused) {
+        if (autoExecute && !freshSettings?.isPaused && autoExecutedThisScan < autoExecuteSlotsRemaining) {
+          autoExecutedThisScan += 1;
           void this.autoExecute(signal.id).catch(async (err: unknown) => {
             await this.logsService.error('scanner', `Auto-execute failed for ${symbolRecord.symbol}`, {
               signalId: signal.id,
@@ -591,9 +599,10 @@ export class ScannerService {
       const effectiveConsecutiveLosses = consecutiveLosses === -1 ? bucket.length : consecutiveLosses;
       let blockedReason: string | undefined;
 
-      if (effectiveConsecutiveLosses >= 6) {
-        blockedReason = '6 consecutive losses today';
-      } else if (bucket.length >= 6 && totalPnl < strategyDrawdownLimit) {
+      const maxConsecLosses = s?.maxConsecutiveLosses ?? 6;
+      if (effectiveConsecutiveLosses >= maxConsecLosses) {
+        blockedReason = `${maxConsecLosses} consecutive losses today`;
+      } else if (bucket.length >= maxConsecLosses && totalPnl < strategyDrawdownLimit) {
         blockedReason = 'daily strategy drawdown exceeded';
       }
 

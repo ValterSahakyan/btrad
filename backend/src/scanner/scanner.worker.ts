@@ -27,5 +27,11 @@ export class ScannerWorker implements OnModuleInit {
     worker.on('failed', async (_job, error) => {
       await this.logsService.error('scanner-worker', 'Scanner job failed', { error: error.message });
     });
+
+    worker.on('error', (error) => {
+      this.logsService
+        .error('scanner-worker', 'Scanner worker error', { error: error.message })
+        .catch(() => {});
+    });
   }
 }

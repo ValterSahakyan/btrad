@@ -261,12 +261,13 @@ export class DashboardController {
     const settings = await this.getSettings();
     const [updated, cancelled] = await Promise.all([
       this.prisma.botSettings.update({ where: { id: settings.id }, data: { isPaused: true } }),
-      // Expire all queued signals so nothing executes when the bot is resumed.
-      // 'approved' signals are intentionally excluded — they are mid-execution and
-      // cancelling them there could leave an unprotected open position on Binance.
+      // Cancel all queued AND claimed signals so nothing executes on resume.
+      // 'approved' signals are mid-claim but approveLive re-checks isPaused before
+      // touching Binance and will cancel them too — including them here handles the
+      // race where approveLive hasn't reached that check yet.
       this.prisma.signal.updateMany({
-        where: { status: { in: ['active', 'pending'] } },
-        data: { status: 'expired' },
+        where: { status: { in: ['active', 'pending', 'approved'] } },
+        data: { status: 'cancelled' },
       }),
     ]);
     await this.logsService.audit('bot.stopped', getActor(request), { signalsCancelled: cancelled.count });

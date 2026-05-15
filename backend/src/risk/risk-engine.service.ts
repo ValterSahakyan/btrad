@@ -119,8 +119,9 @@ export class RiskEngineService {
     }
     if (dailyLossPercent >= maxDailyLossPercent) messages.push('Daily loss limit reached');
     if (effectiveConsecutiveLosses >= maxConsecutiveLosses) messages.push('Max consecutive losses reached');
+    const maxSpreadPercent = settings?.maxSpreadPercent ?? 0.4;
     if (input.riskReward < minRiskReward) messages.push('Risk reward below minimum');
-    if (input.spread > 0.4) messages.push('Spread too high');
+    if (input.spread > maxSpreadPercent) messages.push('Spread too high');
     if (input.marketRegime === 'no_trade') messages.push('Market regime blocked');
     if (positionSize.quantity <= 0) messages.push('Invalid position size');
     const notionalUsd = positionSize.quantity * input.entryPrice;

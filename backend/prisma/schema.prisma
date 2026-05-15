@@ -58,6 +58,7 @@ model BotSettings {
   signalExpirationMinutes      Int      @default(15)
   maxSymbolsPerScan            Int      @default(50)
   minHotScoreForScan           Float    @default(45)
+  maxSpreadPercent             Float    @default(0.4)
 
   fixedRoeEnabled              Boolean  @default(false)
   fixedRoeTpPercent            Float    @default(20)

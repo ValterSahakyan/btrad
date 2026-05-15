@@ -4,6 +4,13 @@ import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { PrismaService } from './prisma/prisma.service';
 
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection]', reason);
+});
+process.on('uncaughtException', (error) => {
+  console.error('[uncaughtException]', error);
+});
+
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
 

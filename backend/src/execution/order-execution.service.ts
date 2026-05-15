@@ -52,7 +52,8 @@ export class OrderExecutionService {
 
     const settings = applyWeekendOverrides(await this.prisma.botSettings.findFirst());
     if (settings?.isPaused) {
-      await revertToActive();
+      // Cancelled — not reverted to active. A paused bot shouldn't have retriable signals.
+      await this.prisma.signal.update({ where: { id: signalId }, data: { status: 'cancelled' } }).catch(() => null);
       throw new BadRequestException('Bot is stopped');
     }
     if (!settings?.realTradingEnabled) {
@@ -143,15 +144,31 @@ export class OrderExecutionService {
       }
     }
 
-    // Second duplicate guard — the first check (above) can be bypassed when two
-    // executions race through validation simultaneously. Re-check here, just before
-    // any exchange orders are placed, to catch that window.
+    // Second duplicate guard — same-symbol race (two signals for the same coin firing simultaneously).
     const raceGuard = await this.prisma.trade.findFirst({
       where: { symbol: sym.symbol, status: 'live_open' },
     });
     if (raceGuard) {
       await revertToActive();
       throw new BadRequestException(`A live trade for ${signal.symbol.symbol} is already open`);
+    }
+
+    // Third guard — global max-open-trades race.
+    // When multiple signals are auto-executed concurrently (fire-and-forget void calls),
+    // ALL of them pass the first count check (lines 84-88) before any commits a trade row.
+    // This final read, taken just before any exchange contact, is the definitive gate.
+    const finalOpenCount = await this.prisma.trade.count({ where: { status: 'live_open' } });
+    if (finalOpenCount >= (settings.maxOpenTrades ?? 2)) {
+      await revertToActive();
+      throw new BadRequestException(`Max open trades reached at execution time (${finalOpenCount}/${settings.maxOpenTrades ?? 2})`);
+    }
+
+    // Fourth guard — isPaused re-check at the point of no return.
+    // Stop may have fired after the first check. Any call past this line touches Binance.
+    const pauseCheck = await this.prisma.botSettings.findFirst();
+    if (pauseCheck?.isPaused) {
+      await this.prisma.signal.update({ where: { id: signalId }, data: { status: 'cancelled' } }).catch(() => null);
+      throw new BadRequestException('Bot was stopped before order placement');
     }
 
     await this.binanceService.setLeverage(sym.symbol, signal.leverage);
