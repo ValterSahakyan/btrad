@@ -712,9 +712,6 @@ function normalizeSettingsUpdate(body: UpdateSettingsDto): UpdateSettingsDto {
   delete (normalized as UpdateSettingsDto & { weekendMinHotScoreForScan?: number }).weekendMinHotScoreForScan;
   delete (normalized as UpdateSettingsDto & { weekendRiskPerTradePercent?: number }).weekendRiskPerTradePercent;
   delete (normalized as UpdateSettingsDto & { weekendMaxPositionUsd?: number }).weekendMaxPositionUsd;
-  delete (normalized as UpdateSettingsDto & { sessionModeEnabled?: boolean }).sessionModeEnabled;
-  delete (normalized as UpdateSettingsDto & { tradingWindowStartHourUtc?: number }).tradingWindowStartHourUtc;
-  delete (normalized as UpdateSettingsDto & { tradingWindowEndHourUtc?: number }).tradingWindowEndHourUtc;
   delete (normalized as UpdateSettingsDto & { maxLongOpenTrades?: number }).maxLongOpenTrades;
   delete (normalized as UpdateSettingsDto & { maxShortOpenTrades?: number }).maxShortOpenTrades;
   delete (normalized as UpdateSettingsDto & { breakoutMaxOpenTrades?: number }).breakoutMaxOpenTrades;
@@ -745,9 +742,6 @@ function serializeSettings<T extends { realTradingEnabled: boolean; requireDashb
     weekendMinHotScoreForScan: _weekendMinHotScoreForScan,
     weekendRiskPerTradePercent: _weekendRiskPerTradePercent,
     weekendMaxPositionUsd: _weekendMaxPositionUsd,
-    sessionModeEnabled: _sessionModeEnabled,
-    tradingWindowStartHourUtc: _tradingWindowStartHourUtc,
-    tradingWindowEndHourUtc: _tradingWindowEndHourUtc,
     maxLongOpenTrades: _maxLongOpenTrades,
     maxShortOpenTrades: _maxShortOpenTrades,
     breakoutMaxOpenTrades: _breakoutMaxOpenTrades,
@@ -764,9 +758,6 @@ function serializeSettings<T extends { realTradingEnabled: boolean; requireDashb
     weekendMinHotScoreForScan?: number;
     weekendRiskPerTradePercent?: number;
     weekendMaxPositionUsd?: number;
-    sessionModeEnabled?: boolean;
-    tradingWindowStartHourUtc?: number;
-    tradingWindowEndHourUtc?: number;
     maxLongOpenTrades?: number;
     maxShortOpenTrades?: number;
     breakoutMaxOpenTrades?: number;

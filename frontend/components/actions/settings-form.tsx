@@ -27,6 +27,9 @@ type SettingsState = {
   minConfidenceScore: number;
   minRiskReward: number;
   maxSpreadPercent: number;
+  sessionModeEnabled: boolean;
+  tradingWindowStartHourUtc: number;
+  tradingWindowEndHourUtc: number;
   breakoutEnabled: boolean;
   breakoutMinVolumeRatio: number;
   breakoutLookbackPeriod: number;
@@ -107,6 +110,9 @@ const SECTIONS: Section[] = [
       { key: 'minConfidenceScore',      label: 'Min Confidence' },
       { key: 'minRiskReward',           label: 'Min R/R' },
       { key: 'maxSpreadPercent',        label: 'Max Spread',            unit: '%' },
+      { key: 'sessionModeEnabled',      label: 'Trading Window (UTC)' },
+      { key: 'tradingWindowStartHourUtc', label: 'Window Start',         unit: 'UTC hour (0=midnight)' },
+      { key: 'tradingWindowEndHourUtc',   label: 'Window End',           unit: 'UTC hour (24=midnight)' },
     ],
   },
   {
@@ -192,7 +198,7 @@ const SECTIONS: Section[] = [
 const BOOLEAN_KEYS = new Set([
   'enableRealTrading', 'allowAutoLiveExecution',
   'breakoutEnabled', 'pullbackEnabled', 'reversionEnabled', 'trendReclaimEnabled', 'rangeBounceEnabled',
-  'fixedRoeEnabled',
+  'fixedRoeEnabled', 'sessionModeEnabled',
 ]);
 
 const inputCls =
@@ -224,6 +230,9 @@ export function SettingsForm({ settings }: { settings: any }) {
     maxSymbolsPerScan: settings.maxSymbolsPerScan ?? 50,
     minHotScoreForScan: settings.minHotScoreForScan ?? 55,
     maxSpreadPercent: settings.maxSpreadPercent ?? 0.4,
+    sessionModeEnabled: settings.sessionModeEnabled ?? false,
+    tradingWindowStartHourUtc: settings.tradingWindowStartHourUtc ?? 0,
+    tradingWindowEndHourUtc: settings.tradingWindowEndHourUtc ?? 24,
     breakoutEnabled: settings.breakoutEnabled ?? true,
     breakoutMinVolumeRatio: settings.breakoutMinVolumeRatio ?? 1.5,
     breakoutLookbackPeriod: settings.breakoutLookbackPeriod ?? 20,

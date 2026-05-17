@@ -107,6 +107,22 @@ export class UpdateSettingsDto {
 
   @IsOptional()
   @IsBoolean()
+  sessionModeEnabled?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(23)
+  tradingWindowStartHourUtc?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(24)
+  tradingWindowEndHourUtc?: number;
+
+  @IsOptional()
+  @IsBoolean()
   fixedRoeEnabled?: boolean;
 
   @IsOptional()
