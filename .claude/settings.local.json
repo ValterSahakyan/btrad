@@ -59,7 +59,9 @@
       "Bash(npm --workspace backend run prisma:migrate)",
       "Bash(grep -v \"^$\")",
       "Bash(grep -r \"pause\\\\|stop\\\\|resume\" /c/work/btrad/frontend --include=\"*.tsx\" --include=\"*.ts\" ! -path \"*/.next-prod/*\")",
-      "Bash(grep -r \"bot/pause\\\\|bot/stop\\\\|bot/resume\\\\|bot/start\" /c/work/btrad/frontend --include=\"*.tsx\" --include=\"*.ts\" ! -path \"*/.next-prod/*\")"
+      "Bash(grep -r \"bot/pause\\\\|bot/stop\\\\|bot/resume\\\\|bot/start\" /c/work/btrad/frontend --include=\"*.tsx\" --include=\"*.ts\" ! -path \"*/.next-prod/*\")",
+      "Bash(git worktree *)",
+      "Bash(git branch *)"
     ]
   }
 }

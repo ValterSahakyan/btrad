@@ -697,6 +697,25 @@ function validateSettingsConsistency(body: UpdateSettingsDto): void {
   if (body.fixedRoeSlPercent !== undefined && body.fixedRoeSlPercent <= 0) {
     throw new BadRequestException('Fixed ROE Stop Loss must be greater than 0');
   }
+
+  // Guard against TP multipliers below minRiskReward — those strategies would
+  // always return null (the strategy filters itself before even creating a candidate).
+  // Pullback uses TP1 for its R/R check; all other strategies use TP2.
+  const minRR = body.minRiskReward;
+  if (minRR !== undefined) {
+    if (body.pullbackTp1Multiplier !== undefined && body.pullbackTp1Multiplier < minRR) {
+      throw new BadRequestException(`Pullback TP1 multiplier (${body.pullbackTp1Multiplier}) must be ≥ Min R/R (${minRR}) — pullback strategy uses TP1 for its R/R check`);
+    }
+    if (body.breakoutTp2Multiplier !== undefined && body.breakoutTp2Multiplier < minRR) {
+      throw new BadRequestException(`Breakout TP2 multiplier (${body.breakoutTp2Multiplier}) must be ≥ Min R/R (${minRR})`);
+    }
+    if (body.trendReclaimTp2Multiplier !== undefined && body.trendReclaimTp2Multiplier < minRR) {
+      throw new BadRequestException(`Trend Reclaim TP2 multiplier (${body.trendReclaimTp2Multiplier}) must be ≥ Min R/R (${minRR})`);
+    }
+    if (body.rangeBounceTp2Multiplier !== undefined && body.rangeBounceTp2Multiplier < minRR) {
+      throw new BadRequestException(`Range Bounce TP2 multiplier (${body.rangeBounceTp2Multiplier}) must be ≥ Min R/R (${minRR})`);
+    }
+  }
 }
 
 function getActor(request: Request): string {
