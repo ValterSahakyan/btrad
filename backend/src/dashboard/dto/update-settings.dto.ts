@@ -100,6 +100,12 @@ export class UpdateSettingsDto {
   minHotScoreForScan?: number;
 
   @IsOptional()
+  @IsNumber()
+  @Min(0.01)
+  @Max(10)
+  maxSpreadPercent?: number;
+
+  @IsOptional()
   @IsBoolean()
   fixedRoeEnabled?: boolean;
 
@@ -212,6 +218,18 @@ export class UpdateSettingsDto {
   @Min(0)
   @Max(100)
   pullbackMinHotScore?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0.5)
+  @Max(20)
+  pullbackTp1Multiplier?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0.5)
+  @Max(30)
+  pullbackTp2Multiplier?: number;
 
   @IsOptional()
   @IsBoolean()

@@ -26,6 +26,7 @@ type SettingsState = {
   minHotScoreForScan: number;
   minConfidenceScore: number;
   minRiskReward: number;
+  maxSpreadPercent: number;
   breakoutEnabled: boolean;
   breakoutMinVolumeRatio: number;
   breakoutLookbackPeriod: number;
@@ -41,6 +42,8 @@ type SettingsState = {
   pullbackAtrMultiplier: number;
   pullbackMaxSlPercent: number;
   pullbackMinHotScore: number;
+  pullbackTp1Multiplier: number;
+  pullbackTp2Multiplier: number;
   reversionEnabled: boolean;
   reversionRsiOverbought: number;
   reversionRsiOversold: number;
@@ -103,6 +106,7 @@ const SECTIONS: Section[] = [
       { key: 'minHotScoreForScan',      label: 'Min Hot Score' },
       { key: 'minConfidenceScore',      label: 'Min Confidence' },
       { key: 'minRiskReward',           label: 'Min R/R' },
+      { key: 'maxSpreadPercent',        label: 'Max Spread',            unit: '%' },
     ],
   },
   {
@@ -138,6 +142,8 @@ const SECTIONS: Section[] = [
       { key: 'pullbackRsiShortMax',     label: 'RSI Short Max' },
       { key: 'pullbackAtrMultiplier',   label: 'ATR Zone',          unit: 'x ATR', min: 0.1, max: 10 },
       { key: 'pullbackMaxSlPercent',    label: 'Max SL',            unit: '%' },
+      { key: 'pullbackTp1Multiplier',   label: 'TP1 Mult.',         unit: 'x risk' },
+      { key: 'pullbackTp2Multiplier',   label: 'TP2 Mult.',         unit: 'x risk' },
       { key: 'pullbackMinHotScore',     label: 'Min Hot Score' },
     ],
   },
@@ -217,6 +223,7 @@ export function SettingsForm({ settings }: { settings: any }) {
     signalExpirationMinutes: settings.signalExpirationMinutes ?? 15,
     maxSymbolsPerScan: settings.maxSymbolsPerScan ?? 50,
     minHotScoreForScan: settings.minHotScoreForScan ?? 55,
+    maxSpreadPercent: settings.maxSpreadPercent ?? 0.4,
     breakoutEnabled: settings.breakoutEnabled ?? true,
     breakoutMinVolumeRatio: settings.breakoutMinVolumeRatio ?? 1.5,
     breakoutLookbackPeriod: settings.breakoutLookbackPeriod ?? 20,
@@ -231,6 +238,8 @@ export function SettingsForm({ settings }: { settings: any }) {
     pullbackRsiShortMax: settings.pullbackRsiShortMax ?? 62,
     pullbackAtrMultiplier: settings.pullbackAtrMultiplier ?? 1.5,
     pullbackMaxSlPercent: settings.pullbackMaxSlPercent ?? 4,
+    pullbackTp1Multiplier: settings.pullbackTp1Multiplier ?? 1.5,
+    pullbackTp2Multiplier: settings.pullbackTp2Multiplier ?? 2.5,
     pullbackMinHotScore: settings.pullbackMinHotScore ?? 40,
     reversionEnabled: settings.reversionEnabled ?? true,
     reversionRsiOverbought: settings.reversionRsiOverbought ?? 75,

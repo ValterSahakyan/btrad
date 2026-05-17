@@ -136,34 +136,41 @@ export class PositionMonitorService implements OnModuleInit {
         const quantity = Math.abs(Number(pos.positionAmt));
         if (!Number.isFinite(quantity) || quantity <= 0) continue;
 
-        const alreadyExists = await this.prisma.trade.findFirst({
-          where: { symbol: pos.symbol, status: 'live_open' },
-        });
-        if (alreadyExists) continue;
+        try {
+          const alreadyExists = await this.prisma.trade.findFirst({
+            where: { symbol: pos.symbol, status: 'live_open' },
+          });
+          if (alreadyExists) continue;
 
-        const entryPrice = Number(pos.entryPrice);
-        const leverage = Math.max(1, Number(pos.leverage) || 1);
-        const margin = (quantity * entryPrice) / leverage;
+          const entryPrice = Number(pos.entryPrice);
+          const leverage = Math.max(1, Number(pos.leverage) || 1);
+          const margin = (quantity * entryPrice) / leverage;
 
-        await this.prisma.trade.create({
-          data: {
+          await this.prisma.trade.create({
+            data: {
+              symbol: pos.symbol,
+              direction: Number(pos.positionAmt) > 0 ? 'LONG' : 'SHORT',
+              entryPrice,
+              quantity,
+              leverage,
+              margin: Number(margin.toFixed(4)),
+              status: 'live_open',
+              openedAt: new Date(pos.updateTime || Date.now()),
+            },
+          });
+
+          await this.logsService.risk(
+            'orphan_position_imported',
+            `Orphan position imported: ${pos.symbol} — no DB record found (lost on crash or opened externally).`,
+            'high',
+            { symbol: pos.symbol, quantity, entryPrice, leverage },
+          );
+        } catch (importErr) {
+          await this.logsService.warn('monitor', `Failed to import orphan position for ${pos.symbol}`, {
             symbol: pos.symbol,
-            direction: Number(pos.positionAmt) > 0 ? 'LONG' : 'SHORT',
-            entryPrice,
-            quantity,
-            leverage,
-            margin: Number(margin.toFixed(4)),
-            status: 'live_open',
-            openedAt: new Date(pos.updateTime || Date.now()),
-          },
-        });
-
-        await this.logsService.risk(
-          'orphan_position_imported',
-          `Orphan position imported: ${pos.symbol} — no DB record found (lost on crash or opened externally).`,
-          'high',
-          { symbol: pos.symbol, quantity, entryPrice, leverage },
-        );
+            error: importErr instanceof Error ? importErr.message : String(importErr),
+          });
+        }
       }
     } catch (err) {
       await this.logsService.warn('monitor', 'Live position check failed', {

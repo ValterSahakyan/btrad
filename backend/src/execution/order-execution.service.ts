@@ -307,6 +307,15 @@ export class OrderExecutionService {
     // Binance reduceOnly auto-adjusts qty down if position is already partially closed.
     const halfQty = Math.floor(quantity / 2 / sym.stepSize) * sym.stepSize;
 
+    if (halfQty <= 0) {
+      await this.logsService.warn('execution', 'Position too small to split TP — using single full-qty TP2 order', {
+        symbol: sym.symbol,
+        quantity,
+        stepSize: sym.stepSize,
+        tradeId: trade.id,
+      });
+    }
+
     let tp1Result: BinanceOrderResult | null = null;
     let tp2Result: BinanceOrderResult | null = null;
 
