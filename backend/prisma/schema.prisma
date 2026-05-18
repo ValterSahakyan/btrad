@@ -59,6 +59,7 @@ model BotSettings {
   maxSymbolsPerScan            Int      @default(50)
   minHotScoreForScan           Float    @default(45)
   maxSpreadPercent             Float    @default(0.4)
+  minDailyVolumeUsd            Float    @default(5000000)
 
   fixedRoeEnabled              Boolean  @default(false)
   fixedRoeTpPercent            Float    @default(20)

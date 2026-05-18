@@ -101,6 +101,12 @@ export class UpdateSettingsDto {
 
   @IsOptional()
   @IsNumber()
+  @Min(0)
+  @Max(1_000_000_000)
+  minDailyVolumeUsd?: number;
+
+  @IsOptional()
+  @IsNumber()
   @Min(0.01)
   @Max(10)
   maxSpreadPercent?: number;

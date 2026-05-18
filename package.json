@@ -12,6 +12,12 @@
     "build": "npm run build --workspaces",
     "test": "npm run test --workspaces",
     "docker:up": "docker compose up --build",
-    "docker:down": "docker compose down"
+    "docker:start": "docker compose up -d --build",
+    "docker:stop": "docker compose stop",
+    "docker:down": "docker compose down",
+    "docker:restart": "docker compose restart",
+    "docker:logs": "docker compose logs -f",
+    "docker:logs:backend": "docker compose logs -f backend",
+    "docker:status": "docker compose ps"
   }
 }

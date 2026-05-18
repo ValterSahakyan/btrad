@@ -86,8 +86,8 @@ export default function LoginPage() {
       <div className="w-full max-w-[360px] space-y-6">
         {/* Logo */}
         <div className="text-center space-y-1">
-          <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-dim">PerpScout AI</div>
-          <h1 className="text-2xl font-semibold text-white">Futures Terminal</h1>
+          <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-dim">Algorithmic Trading</div>
+          <h1 className="text-2xl font-semibold text-white">BEE trad</h1>
           <p className="text-[12px] text-dim">Connect your authorized wallet to continue</p>
         </div>
 

@@ -27,6 +27,7 @@ type SettingsState = {
   minConfidenceScore: number;
   minRiskReward: number;
   maxSpreadPercent: number;
+  minDailyVolumeUsd: number;
   sessionModeEnabled: boolean;
   tradingWindowStartHourUtc: number;
   tradingWindowEndHourUtc: number;
@@ -110,6 +111,7 @@ const SECTIONS: Section[] = [
       { key: 'minConfidenceScore',      label: 'Min Confidence' },
       { key: 'minRiskReward',           label: 'Min R/R' },
       { key: 'maxSpreadPercent',        label: 'Max Spread',            unit: '%' },
+      { key: 'minDailyVolumeUsd',       label: 'Min 24h Volume',        unit: 'USD' },
       { key: 'sessionModeEnabled',      label: 'Trading Window (UTC)' },
       { key: 'tradingWindowStartHourUtc', label: 'Window Start',         unit: 'UTC hour (0=midnight)' },
       { key: 'tradingWindowEndHourUtc',   label: 'Window End',           unit: 'UTC hour (24=midnight)' },
@@ -230,6 +232,7 @@ export function SettingsForm({ settings }: { settings: any }) {
     maxSymbolsPerScan: settings.maxSymbolsPerScan ?? 50,
     minHotScoreForScan: settings.minHotScoreForScan ?? 55,
     maxSpreadPercent: settings.maxSpreadPercent ?? 0.4,
+    minDailyVolumeUsd: settings.minDailyVolumeUsd ?? 5000000,
     sessionModeEnabled: settings.sessionModeEnabled ?? false,
     tradingWindowStartHourUtc: settings.tradingWindowStartHourUtc ?? 0,
     tradingWindowEndHourUtc: settings.tradingWindowEndHourUtc ?? 24,

@@ -28,7 +28,7 @@ const navItems: Array<{ href: Route; label: string; icon: ComponentType<{ size?:
 
 const productMeta = {
   exchange: 'Binance USD-M Futures',
-  app: 'PerpScout AI v1.0',
+  app: 'BEE trad v1.0',
 };
 
 export function Sidebar() {
@@ -42,7 +42,7 @@ export function Sidebar() {
             <ChevronRight size={14} className="text-accent" strokeWidth={2.5} />
           </div>
           <div>
-            <div className="text-[13px] font-semibold text-white tracking-wide">BTRAD</div>
+            <div className="text-[13px] font-semibold text-white tracking-wide">BEE trad</div>
             <div className="text-[10px] text-dim uppercase tracking-widest">Futures</div>
           </div>
         </div>

@@ -106,6 +106,7 @@ export class ScannerService {
 
     const maxSymbols = settings?.maxSymbolsPerScan ?? 50;
     const minHotScore = settings?.minHotScoreForScan ?? 45;
+    const minDailyVolumeUsd = (settings as any)?.minDailyVolumeUsd ?? 5_000_000;
     const effectiveMaxOpenTrades = settings?.maxOpenTrades ?? 2;
     const currentOpenTradeCount = await this.prisma.trade.count({ where: { status: 'live_open' } });
     // Cap auto-executes this scan to remaining available slots.
@@ -120,11 +121,14 @@ export class ScannerService {
       this.binanceService.fetch24hTickerStats(),
     ]);
 
-    // Sort symbols by 24h quote volume descending (most active first)
+    // Sort symbols by 24h quote volume descending (most active first).
+    // Pre-filter by minimum daily volume before the expensive per-symbol candle fetch.
     const tickerMap = new Map(tickers.map((t) => [t.symbol, t]));
     const sorted = enabledSymbols
       .map((s) => ({ record: s, ticker: tickerMap.get(s.symbol) }))
-      .filter((item): item is { record: typeof item.record; ticker: NonNullable<typeof item.ticker> } => !!item.ticker)
+      .filter((item): item is { record: typeof item.record; ticker: NonNullable<typeof item.ticker> } =>
+        !!item.ticker && Number(item.ticker.quoteVolume) >= minDailyVolumeUsd,
+      )
       .sort((a, b) => Number(b.ticker.quoteVolume) - Number(a.ticker.quoteVolume))
       .slice(0, maxSymbols);
 
