@@ -47,7 +47,22 @@ export function TradeVoiceNotifier() {
       window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify([...seenTradeIdsRef.current]));
     };
 
+    let voiceEnabled = true;
+
+    const fetchVoiceSetting = async () => {
+      try {
+        const res = await fetch(clientApiPath('/settings'), { credentials: 'include', cache: 'no-store' });
+        if (res.ok) {
+          const s = (await res.json()) as { voiceNotificationsEnabled?: boolean };
+          voiceEnabled = s.voiceNotificationsEnabled !== false;
+        }
+      } catch {
+        // non-critical
+      }
+    };
+
     const speak = (message: string) => {
+      if (!voiceEnabled) return;
       if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(message);
@@ -119,8 +134,12 @@ export function TradeVoiceNotifier() {
       }
     };
 
+    void fetchVoiceSetting();
     void checkTrades();
-    const intervalId = window.setInterval(checkTrades, REFRESH_MS);
+    const intervalId = window.setInterval(async () => {
+      await fetchVoiceSetting();
+      await checkTrades();
+    }, REFRESH_MS);
 
     return () => {
       disposed = true;

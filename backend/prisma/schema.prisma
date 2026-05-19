@@ -75,6 +75,7 @@ model BotSettings {
   sessionModeEnabled           Boolean  @default(false)
   tradingWindowStartHourUtc    Int      @default(0)
   tradingWindowEndHourUtc      Int      @default(24)
+  voiceNotificationsEnabled    Boolean  @default(true)
   maxLongOpenTrades            Int      @default(0)
   maxShortOpenTrades           Int      @default(0)
   breakoutMaxOpenTrades        Int      @default(0)

@@ -19,6 +19,10 @@ export class UpdateSettingsDto {
 
   @IsOptional()
   @IsBoolean()
+  voiceNotificationsEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   allowAutoLiveExecution?: boolean;
 
   @IsOptional()

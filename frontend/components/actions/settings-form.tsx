@@ -73,6 +73,7 @@ type SettingsState = {
   fixedRoeEnabled: boolean;
   fixedRoeTpPercent: number;
   fixedRoeSlPercent: number;
+  voiceNotificationsEnabled: boolean;
 };
 
 type Field = { key: keyof SettingsState; label: string; unit?: string; min?: number; max?: number };
@@ -82,9 +83,10 @@ const SECTIONS: Section[] = [
   {
     title: 'General',
     fields: [
-      { key: 'mode',                  label: 'Mode' },
-      { key: 'enableRealTrading',     label: 'Real Trading' },
-      { key: 'allowAutoLiveExecution',label: 'Auto-Execute' },
+      { key: 'mode',                       label: 'Mode' },
+      { key: 'enableRealTrading',          label: 'Real Trading' },
+      { key: 'allowAutoLiveExecution',     label: 'Auto-Execute' },
+      { key: 'voiceNotificationsEnabled',  label: 'Voice Notifications' },
     ],
   },
   {
@@ -198,7 +200,7 @@ const SECTIONS: Section[] = [
 ];
 
 const BOOLEAN_KEYS = new Set([
-  'enableRealTrading', 'allowAutoLiveExecution',
+  'enableRealTrading', 'allowAutoLiveExecution', 'voiceNotificationsEnabled',
   'breakoutEnabled', 'pullbackEnabled', 'reversionEnabled', 'trendReclaimEnabled', 'rangeBounceEnabled',
   'fixedRoeEnabled', 'sessionModeEnabled',
 ]);
@@ -278,6 +280,7 @@ export function SettingsForm({ settings }: { settings: any }) {
     fixedRoeEnabled: settings.fixedRoeEnabled ?? false,
     fixedRoeTpPercent: settings.fixedRoeTpPercent ?? 20,
     fixedRoeSlPercent: settings.fixedRoeSlPercent ?? 20,
+    voiceNotificationsEnabled: settings.voiceNotificationsEnabled ?? true,
   });
 
   const [isPending, setPending] = useState(false);

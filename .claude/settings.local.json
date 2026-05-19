@@ -62,7 +62,8 @@
       "Bash(grep -r \"bot/pause\\\\|bot/stop\\\\|bot/resume\\\\|bot/start\" /c/work/btrad/frontend --include=\"*.tsx\" --include=\"*.ts\" ! -path \"*/.next-prod/*\")",
       "Bash(git worktree *)",
       "Bash(git branch *)",
-      "Bash(npm --workspace backend run test)"
+      "Bash(npm --workspace backend run test)",
+      "Bash(npx --prefix backend prisma db push --schema=backend/prisma/schema.prisma)"
     ]
   }
 }
