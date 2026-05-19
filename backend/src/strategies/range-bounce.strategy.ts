@@ -46,7 +46,11 @@ export class RangeBounceStrategy implements TradingStrategy {
     const nearSupport = supportDistance <= atr14 * cfg.proximityAtr;
     const nearResistance = resistanceDistance <= atr14 * cfg.proximityAtr;
     const rangeWidthPct = support > 0 ? ((resistance - support) / support) * 100 : 0;
-    if (rangeWidthPct < 1) return null;
+    // Require a meaningful range (≥3%) and both levels tested at least twice.
+    // A 1% range gives no room for TP2 and is usually just noise in a trending move.
+    // Single-touch S/R is a guess — two or more touches confirm the level is real.
+    if (rangeWidthPct < 3) return null;
+    if (supportStrength < 2 || resistanceStrength < 2) return null;
 
     // Candlestick patterns — critical at S/R (Steve Nison: "patterns only matter at key levels")
     const patterns = detectCandlePatterns(candles15m);

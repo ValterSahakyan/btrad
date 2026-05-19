@@ -52,7 +52,8 @@ export function detectSwingLevels(
   // Cluster nearby pivots — pivots within proximityPct of each other form one level
   function cluster(prices: number[]): Array<{ price: number; count: number }> {
     const groups: Array<{ price: number; count: number }> = [];
-    for (const p of prices) {
+    const sorted = [...prices].sort((a, b) => a - b);
+    for (const p of sorted) {
       const existing = groups.find((g) => Math.abs(g.price - p) / Math.max(g.price, 1) < proximityPct);
       if (existing) {
         existing.price = (existing.price * existing.count + p) / (existing.count + 1);

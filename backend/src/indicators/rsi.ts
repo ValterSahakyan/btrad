@@ -49,7 +49,7 @@ export function detectRsiDivergence(
 }
 
 export const rsi = (values: number[], period = 14): number[] => {
-  if (values.length <= period) {
+  if (values.length <= period + 1) {
     return [];
   }
 
@@ -76,6 +76,11 @@ export const rsi = (values: number[], period = 14): number[] => {
     avgGain = ((avgGain * (period - 1)) + Math.max(delta, 0)) / period;
     avgLoss = ((avgLoss * (period - 1)) + Math.max(-delta, 0)) / period;
   }
+
+  // Push the final RSI using the fully-updated averages (includes the last bar's delta).
+  // Without this, rsi(closes).at(-1) reflects data through closes[n-2], not closes[n-1].
+  const finalRs = avgLoss === 0 ? 100 : avgGain / avgLoss;
+  result.push(100 - 100 / (1 + finalRs));
 
   return result;
 };
