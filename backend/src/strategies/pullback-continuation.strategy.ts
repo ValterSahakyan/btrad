@@ -98,7 +98,7 @@ export class PullbackContinuationStrategy implements TradingStrategy {
       bullishStructure &&
       currentPrice > ema50_1h &&
       currentRsi >= Math.max(cfg.rsiLongMin, 45) &&
-      currentRsi <= Math.min(cfg.rsiLongMax, 60) &&
+      currentRsi <= Math.min(cfg.rsiLongMax, 65) &&
       pullbackDistance >= atr14 * 0.05 &&
       pullbackDistance <= cfg.atrMultiplier * atr14 * 0.85 &&
       recentPullbackLow <= ema20 + atr14 * 0.2 &&

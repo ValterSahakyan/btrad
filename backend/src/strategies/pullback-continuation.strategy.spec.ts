@@ -34,7 +34,7 @@ describe('PullbackContinuationStrategy', () => {
       pullback: {
         enabled: true,
         rsiLongMin: 38,
-        rsiLongMax: 60,
+        rsiLongMax: 65,
         rsiShortMin: 42,
         rsiShortMax: 62,
         atrMultiplier: 1.5,
