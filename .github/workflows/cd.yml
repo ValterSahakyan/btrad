@@ -63,14 +63,37 @@ jobs:
             # have not changed.
             docker compose build backend frontend
 
+            # Ensure postgres and redis are running. --no-deps skips depends_on
+            # health checks, so we must guarantee postgres is healthy ourselves.
+            docker compose up -d postgres redis
+            for i in $(seq 1 30); do
+              PG=$(docker inspect --format='{{.State.Health.Status}}' btrad-postgres-1 2>/dev/null || echo "unknown")
+              echo "Postgres health ($i/30): $PG"
+              [ "$PG" = "healthy" ] && break
+              if [ "$i" -eq 30 ]; then
+                echo "Postgres did not become healthy in 60s"
+                docker compose ps
+                exit 1
+              fi
+              sleep 2
+            done
+
+            # Clear any migration entries stuck in a failed/incomplete state
+            # from a previous aborted deployment. All migration SQL uses
+            # IF NOT EXISTS so re-running after a reset is always safe.
+            docker compose exec -T postgres \
+              psql -U "${POSTGRES_USER:-postgres}" perpscout \
+              -c "DELETE FROM _prisma_migrations WHERE finished_at IS NULL AND rolled_back_at IS NULL;" \
+              2>/dev/null || true
+
             # Restart backend first (runs DB migrations on startup), then frontend.
             # --force-recreate ensures the new image is always used even if the
             # image tag/name is unchanged. Postgres and Redis are untouched.
             docker compose up -d --no-deps --force-recreate backend
             docker compose up -d --no-deps --force-recreate frontend
 
-            # Wait for both application containers to become healthy.
-            for i in $(seq 1 24); do
+            # Wait up to 3 minutes for both containers to become healthy.
+            for i in $(seq 1 36); do
               BACKEND_STATE=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' btrad-backend-1 2>/dev/null || true)
               FRONTEND_STATE=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' btrad-frontend-1 2>/dev/null || true)
               echo "Health check attempt $i: backend=$BACKEND_STATE frontend=$FRONTEND_STATE"
@@ -79,7 +102,7 @@ jobs:
                 break
               fi
 
-              if [ "$i" -eq 24 ]; then
+              if [ "$i" -eq 36 ]; then
                 echo "Deployment failed health checks"
                 docker compose ps
                 docker compose logs --tail=200 backend frontend
