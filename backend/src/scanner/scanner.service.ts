@@ -76,6 +76,7 @@ export class ScannerService {
     const baseSettings = await this.prisma.botSettings.findFirst();
     const settings = applyWeekendOverrides(baseSettings);
     if (baseSettings?.isPaused) {
+      await this.logsService.info('scanner', 'Scan skipped: bot is paused');
       return { processed: 0, signalsCreated: 0 };
     }
 
@@ -94,6 +95,13 @@ export class ScannerService {
     const minDailyVolumeUsd = (settings as any)?.minDailyVolumeUsd ?? 5_000_000;
     const effectiveMaxOpenTrades = settings?.maxOpenTrades ?? 2;
     const currentOpenTradeCount = await this.prisma.trade.count({ where: { status: 'live_open' } });
+    if (currentOpenTradeCount >= effectiveMaxOpenTrades) {
+      await this.logsService.info('scanner', 'Scan skipped: max open trades already reached', {
+        currentOpenTrades: currentOpenTradeCount,
+        maxOpenTrades: effectiveMaxOpenTrades,
+      });
+      return { processed: 0, signalsCreated: 0 };
+    }
     // Cap auto-executes this scan to remaining available slots.
     // Without this, every void autoExecute fires concurrently and all pass the
     // maxOpenTrades check before any of them commits a trade row.
