@@ -63,30 +63,39 @@ export class DashboardController {
   @Get('/status')
   async getStatus() {
     const settings = await this.prisma.botSettings.findFirst();
-    const queuedSignals = await this.prisma.signal.count({
-      where: { status: { in: ['active', 'pending', 'approved'] } },
-    });
-    const executedSignals = await this.prisma.signal.count({
-      where: { status: 'live_executed' },
-    });
-    const dbOpenTrades = await this.prisma.trade.count({
-      where: { status: 'live_open' },
-    });
+    const [queuedSignals, executedSignals, dbOpenTrades, lastScanLog] = await Promise.all([
+      this.prisma.signal.count({ where: { status: { in: ['active', 'pending', 'approved'] } } }),
+      this.prisma.signal.count({ where: { status: 'live_executed' } }),
+      this.prisma.trade.count({ where: { status: 'live_open' } }),
+      this.prisma.botLog.findFirst({
+        where: { source: 'scanner', message: 'Completed market scan' },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
     let exchangeOpenTrades = dbOpenTrades;
+    let binanceApiReachable = true;
+    let binanceApiError: string | null = null;
     if (settings?.mode === 'live' && this.binanceService.hasApiKeys()) {
       try {
         const positions = await this.binanceService.fetchOpenPositions();
         exchangeOpenTrades = positions.length;
-      } catch {
+      } catch (err) {
         exchangeOpenTrades = dbOpenTrades;
+        binanceApiReachable = false;
+        binanceApiError = err instanceof Error ? err.message : String(err);
       }
     }
+
     const openTrades = Math.max(dbOpenTrades, exchangeOpenTrades);
     const executionMode = settings?.realTradingEnabled && settings?.mode === 'live'
       ? settings.requireDashboardConfirmation === false
         ? 'live_auto'
         : 'live_manual'
       : 'signal_only';
+
+    const lastScanMeta = lastScanLog?.metadataJson as Record<string, unknown> | null;
+
     return {
       botStatus: settings?.isPaused ? 'paused' : 'running',
       mode: settings?.mode ?? 'testnet',
@@ -101,10 +110,15 @@ export class DashboardController {
       openTrades,
       dbOpenTrades,
       exchangeOpenTrades,
-      lastScannerRun: (await this.prisma.botLog.findFirst({
-        where: { source: 'scanner', message: 'Completed market scan' },
-        orderBy: { createdAt: 'desc' },
-      }))?.createdAt,
+      binanceApiReachable,
+      binanceApiError,
+      lastScannerRun: lastScanLog?.createdAt ?? null,
+      lastScanSummary: lastScanMeta ? {
+        processed: lastScanMeta.processed,
+        signalsCreated: lastScanMeta.signalsCreated,
+        topBlockers: lastScanMeta.topBlockers,
+        executionMode: lastScanMeta.executionMode,
+      } : null,
     };
   }
 
@@ -281,6 +295,7 @@ export class DashboardController {
   async resumeBot(@Req() request: Request) {
     const settings = await this.getSettings();
     const updated = await this.prisma.botSettings.update({ where: { id: settings.id }, data: { isPaused: false } });
+    await this.scannerService.clearScannerLock();
     await this.logsService.audit('bot.resumed', getActor(request), {});
     return {
       ...serializeSettings(updated),
@@ -293,6 +308,7 @@ export class DashboardController {
     const actor = getActor(request);
     const settings = await this.getSettings();
     await this.prisma.botSettings.update({ where: { id: settings.id }, data: { isPaused: false } });
+    await this.scannerService.clearScannerLock();
 
     const sync = await this.scannerService.syncSymbols();
     const scan = await this.scannerService.runScan();
@@ -308,6 +324,20 @@ export class DashboardController {
       message: `Bot started. Synced ${sync.imported} symbols and processed ${scan.processed} symbols.`,
       sync,
       scan,
+    };
+  }
+
+  @Post('/bot/reconcile-trades')
+  async reconcileTrades(@Req() request: Request) {
+    const result = await this.scannerService.forceReconcileOpenTrades();
+    await this.logsService.audit('bot.reconcile_trades', getActor(request), result);
+    return {
+      ...result,
+      message: result.closed === 0 && result.errors.length === 0
+        ? 'All DB trades match Binance — no action needed.'
+        : result.errors.length > 0
+          ? `Closed ${result.closed} stuck trade(s). Errors: ${result.errors.join('; ')}`
+          : `Closed ${result.closed} stuck trade(s) that were no longer on Binance.`,
     };
   }
 

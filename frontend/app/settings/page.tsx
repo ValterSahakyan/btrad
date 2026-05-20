@@ -117,7 +117,7 @@ export default async function SettingsPage() {
             <p className="mb-3 text-[11px] leading-relaxed text-dim">
               Start resumes scanning and runs one scanner cycle immediately. Stop blocks new scans and new trades.
             </p>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <ActionButton
                 label="Start Bot"
                 path="/bot/start"
@@ -134,6 +134,25 @@ export default async function SettingsPage() {
                 confirmTitle="Stop Bot"
                 confirmMessage="Stop the bot? Existing live trades will still be monitored, but no new scans or trades will start."
                 confirmVariant="danger"
+              />
+              <ActionButton
+                label="Run Scanner"
+                path="/bot/run-scanner"
+                variant="secondary"
+                size="sm"
+              />
+            </div>
+            <div className="mt-3 border-t border-border/50 pt-3">
+              <p className="mb-2 text-[11px] leading-relaxed text-dim">
+                If DB trades do not match Binance positions, reconcile closes ghost trades and frees up slots.
+              </p>
+              <ActionButton
+                label="Reconcile Trades"
+                path="/bot/reconcile-trades"
+                variant="secondary"
+                size="sm"
+                confirmTitle="Reconcile Trades"
+                confirmMessage="Close any DB trades that no longer have a matching Binance position? This frees stuck open-trade slots."
               />
             </div>
           </div>

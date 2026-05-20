@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActionButton } from '@/components/actions/action-button';
 import { DataTable } from '@/components/dashboard/data-table';
 import { MetricCard } from '@/components/dashboard/metric-card';
 import { PnlChart } from '@/components/dashboard/pnl-chart';
@@ -149,6 +150,37 @@ export default function OverviewPage() {
         <div className="flex items-center gap-2 rounded border border-danger/20 bg-danger/5 px-4 py-2.5 text-[12px] text-danger">
           <span className="font-mono">!</span>
           Bot is stopped. Existing live trades are still monitored, but no new scans or trades will start.
+        </div>
+      )}
+
+      {!status.binanceApiReachable && status.mode === 'live' && (
+        <div className="rounded border border-danger/30 bg-danger/5 px-4 py-3 text-[12px] text-danger">
+          <div className="font-semibold">Binance API unreachable — bot cannot trade</div>
+          {status.binanceApiError && (
+            <div className="mt-1 font-mono text-[11px] text-danger/70">{status.binanceApiError}</div>
+          )}
+          <div className="mt-1 text-danger/70">Check your BINANCE_API_KEY and BINANCE_API_SECRET environment variables on the server.</div>
+        </div>
+      )}
+
+      {status.dbOpenTrades > 0 && status.exchangeOpenTrades === 0 && status.mode === 'live' && (
+        <div className="flex items-center justify-between rounded border border-warning/30 bg-warning/5 px-4 py-2.5 text-[12px] text-warning">
+          <span>{status.dbOpenTrades} DB trade(s) have no matching Binance position — they may be stuck and blocking new signals.</span>
+          <ActionButton
+            label="Reconcile Trades"
+            path="/bot/reconcile-trades"
+            variant="secondary"
+            onSuccess={fetchAll}
+          />
+        </div>
+      )}
+
+      {status.lastScanSummary && (status.lastScanSummary as any).topBlockers?.length > 0 && (
+        <div className="rounded border border-white/5 bg-white/[0.02] px-4 py-2.5 text-[12px]">
+          <span className="text-dim">Last scan blockers: </span>
+          {((status.lastScanSummary as any).topBlockers as Array<{ reason: string; count: number }>).map((b) => (
+            <span key={b.reason} className="mr-3 text-warning">{b.reason} ({b.count})</span>
+          ))}
         </div>
       )}
 

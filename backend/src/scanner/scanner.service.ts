@@ -72,6 +72,73 @@ export class ScannerService {
     }
   }
 
+  async clearScannerLock(): Promise<void> {
+    await this.redis.del('scanner:run-lock');
+    this.scanning = false;
+  }
+
+  async forceReconcileOpenTrades(): Promise<{ closed: number; errors: string[] }> {
+    const settings = await this.prisma.botSettings.findFirst();
+    if (settings?.mode !== 'live') {
+      // Can't reconcile against Binance in non-live mode — just return DB state
+      return { closed: 0, errors: ['Bot is not in live mode; cannot reconcile against Binance'] };
+    }
+
+    let binancePositions: { symbol: string }[];
+    try {
+      binancePositions = await this.binanceService.fetchOpenPositions();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      await this.logsService.error('reconcile', 'Failed to fetch Binance positions during reconciliation', { error: msg });
+      return { closed: 0, errors: [`Binance API unreachable: ${msg}`] };
+    }
+
+    const activeSymbols = new Set(binancePositions.map((p) => p.symbol));
+    const dbTrades = await this.prisma.trade.findMany({ where: { status: 'live_open' } });
+
+    let closed = 0;
+    const errors: string[] = [];
+
+    for (const trade of dbTrades) {
+      if (activeSymbols.has(trade.symbol)) continue;
+      try {
+        let exitPrice: number;
+        try {
+          exitPrice = await this.binanceService.fetchMarkPrice(trade.symbol);
+        } catch {
+          exitPrice = trade.entryPrice;
+        }
+        const dirMult = trade.direction === 'LONG' ? 1 : -1;
+        const pnl = (exitPrice - trade.entryPrice) * trade.quantity * dirMult;
+        const pnlPercent = trade.margin === 0 ? 0 : (pnl / trade.margin) * 100;
+
+        await this.prisma.trade.update({
+          where: { id: trade.id },
+          data: {
+            exitPrice: Number(exitPrice.toFixed(8)),
+            pnl: Number(pnl.toFixed(4)),
+            pnlPercent: Number(pnlPercent.toFixed(2)),
+            status: 'manually_closed',
+            closedAt: new Date(),
+          },
+        });
+
+        await this.logsService.info('reconcile', `Force-closed stuck DB trade: ${trade.symbol}`, {
+          tradeId: trade.id,
+          symbol: trade.symbol,
+          exitPrice,
+          pnl,
+        });
+        closed += 1;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        errors.push(`Failed to close ${trade.symbol}: ${msg}`);
+      }
+    }
+
+    return { closed, errors };
+  }
+
   private async _runScan(): Promise<{ processed: number; signalsCreated: number }> {
     const baseSettings = await this.prisma.botSettings.findFirst();
     const settings = applyWeekendOverrides(baseSettings);
@@ -81,6 +148,19 @@ export class ScannerService {
     }
 
     await this.logsService.info('scanner', 'Starting market scan');
+
+    // In live mode, verify the Binance API is reachable before scanning 50 symbols.
+    // A single pre-check here saves generating 50 identical "Symbol scan failed" warnings.
+    if (settings?.mode === 'live') {
+      try {
+        await this.binanceService.fetchLiveAccountBalance();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        await this.logsService.error('scanner', 'Binance live API unreachable — scan aborted', { error: msg });
+        return { processed: 0, signalsCreated: 0 };
+      }
+    }
+
     const regime = await this.marketRegimeService.getRegime();
     await this.logsService.info('scanner', `Market regime: ${regime.regime}`, {
       score: regime.score,
