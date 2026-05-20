@@ -173,6 +173,11 @@ export class ScannerService {
     const maxSymbols = settings?.maxSymbolsPerScan ?? 50;
     const minHotScore = settings?.minHotScoreForScan ?? 45;
     const minDailyVolumeUsd = (settings as any)?.minDailyVolumeUsd ?? 5_000_000;
+    // Block tokens priced below $0.01 — these are typically micro-cap meme/gaming
+    // tokens with extremely high manipulation risk, wide effective spreads, and
+    // poor fill quality. Even if they meet the volume filter, their price dynamics
+    // make reliable pattern recognition nearly impossible.
+    const minTokenPrice = 0.01;
     const effectiveMaxOpenTrades = settings?.maxOpenTrades ?? 2;
     const currentOpenTradeCount = await this.prisma.trade.count({ where: { status: 'live_open' } });
     if (currentOpenTradeCount >= effectiveMaxOpenTrades) {
@@ -195,12 +200,14 @@ export class ScannerService {
     ]);
 
     // Sort symbols by 24h quote volume descending (most active first).
-    // Pre-filter by minimum daily volume before the expensive per-symbol candle fetch.
+    // Pre-filter by minimum daily volume and minimum price before the expensive per-symbol candle fetch.
     const tickerMap = new Map(tickers.map((t) => [t.symbol, t]));
     const sorted = enabledSymbols
       .map((s) => ({ record: s, ticker: tickerMap.get(s.symbol) }))
       .filter((item): item is { record: typeof item.record; ticker: NonNullable<typeof item.ticker> } =>
-        !!item.ticker && Number(item.ticker.quoteVolume) >= minDailyVolumeUsd,
+        !!item.ticker &&
+        Number(item.ticker.quoteVolume) >= minDailyVolumeUsd &&
+        Number(item.ticker.lastPrice) >= minTokenPrice,
       )
       .sort((a, b) => Number(b.ticker.quoteVolume) - Number(a.ticker.quoteVolume))
       .slice(0, maxSymbols);
@@ -572,6 +579,7 @@ export class ScannerService {
       processed,
       signalsCreated,
       symbolsTotal: sorted.length,
+      minTokenPriceFilter: minTokenPrice,
       filteredPreCandidate,
       noStrategyCandidate,
       riskRejected,
