@@ -86,7 +86,7 @@ export class TrendReclaimStrategy implements TradingStrategy {
       lastCandle.close > lastCandle.open &&
       candleBodyRatio >= 0.55 &&
       volumeRatio >= cfg.reclaimVolumeRatio &&
-      currentRsi >= 52 && currentRsi <= 65
+      currentRsi >= 45 && currentRsi <= 72
     ) {
       // Candlestick confirmation — a strong reclaim candle matters
       const hasBullishPattern =
@@ -153,7 +153,7 @@ export class TrendReclaimStrategy implements TradingStrategy {
       lastCandle.close < lastCandle.open &&
       candleBodyRatio >= 0.55 &&
       volumeRatio >= cfg.reclaimVolumeRatio &&
-      currentRsi >= 35 && currentRsi <= 48
+      currentRsi >= 28 && currentRsi <= 55
     ) {
       const hasBearishPattern =
         patterns.bearishEngulfing ||

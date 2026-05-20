@@ -97,8 +97,8 @@ export class PullbackContinuationStrategy implements TradingStrategy {
       htfTrend === 'bullish' &&
       bullishStructure &&
       currentPrice > ema50_1h &&
-      currentRsi >= Math.max(cfg.rsiLongMin, 45) &&
-      currentRsi <= Math.min(cfg.rsiLongMax, 65) &&
+      currentRsi >= cfg.rsiLongMin &&
+      currentRsi <= cfg.rsiLongMax &&
       pullbackDistance >= atr14 * 0.05 &&
       pullbackDistance <= cfg.atrMultiplier * atr14 * 0.85 &&
       recentPullbackLow <= ema20 + atr14 * 0.2 &&
@@ -171,8 +171,8 @@ export class PullbackContinuationStrategy implements TradingStrategy {
       htfTrend === 'bearish' &&
       bearishStructure &&
       currentPrice < ema50_1h &&
-      currentRsi >= Math.max(cfg.rsiShortMin, 42) &&
-      currentRsi <= Math.min(cfg.rsiShortMax, 58) &&
+      currentRsi >= cfg.rsiShortMin &&
+      currentRsi <= cfg.rsiShortMax &&
       pullbackDistance >= atr14 * 0.05 &&
       pullbackDistance <= cfg.atrMultiplier * atr14 * 0.85 &&
       recentPullbackHigh >= ema20 - atr14 * 0.2 &&
