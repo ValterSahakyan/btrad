@@ -5,10 +5,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { applyWeekendOverrides } from '../settings/weekend-settings';
 import { PositionSizeService } from './position-size.service';
 
-type ClosedTradeRow = {
-  pnl: number | null;
-};
-
 @Injectable()
 export class RiskEngineService {
   constructor(
@@ -47,13 +43,6 @@ export class RiskEngineService {
     const longTradeCount = openTradeRows.filter((t) => t.direction === 'LONG').length;
     const shortTradeCount = openTradeRows.filter((t) => t.direction === 'SHORT').length;
     const strategyTradeCount = openTradeRows.filter((t) => t.signal?.strategy === input.strategy).length;
-    const todayStart = new Date();
-    todayStart.setUTCHours(0, 0, 0, 0);
-    const closedTrades: ClosedTradeRow[] = await this.prisma.trade.findMany({
-      where: { closedAt: { gte: todayStart }, pnl: { not: null } },
-      orderBy: { closedAt: 'desc' },
-      select: { pnl: true },
-    });
     const balanceRows = await (settings?.mode === 'live'
       ? this.binanceService.fetchLiveAccountBalance()
       : this.binanceService.fetchAccountBalance()).catch((err) => {
@@ -62,20 +51,12 @@ export class RiskEngineService {
     });
     const usdtRow = balanceRows.find((row) => row.asset === 'USDT');
     const availableBalance = Number(usdtRow?.availableBalance ?? 0);
-    const totalBalance = Number(usdtRow?.balance ?? 0);
-    // Use wallet balance for daily loss limits so open margin usage does not
-    // artificially shrink the denominator and block new entries too early.
-    // Keep available balance for actual position sizing.
-    const riskReferenceBalance =
-      totalBalance > 0 ? totalBalance : (settings?.mode === 'live' ? 0 : 10_000);
     // In testnet/paper mode use a $10k paper balance when real testnet funds are zero
     const usdtBalance =
       availableBalance > 0 ? availableBalance : (settings?.mode === 'live' ? 0 : 10_000);
 
     const riskPerTradePercent = settings?.riskPerTradePercent ?? 1;
     const maxOpenTrades = settings?.maxOpenTrades ?? 2;
-    const maxDailyLossPercent = settings?.maxDailyLossPercent ?? 3;
-    const maxConsecutiveLosses = settings?.maxConsecutiveLosses ?? 3;
     const maxLeverage = settings?.maxLeverage ?? 5;
     const minRiskReward = settings?.minRiskReward ?? 1.5;
     const defaultLeverage = settings?.defaultLeverage ?? 3;
@@ -83,13 +64,6 @@ export class RiskEngineService {
     const maxLongOpenTrades = settings?.maxLongOpenTrades ?? 0;
     const maxShortOpenTrades = settings?.maxShortOpenTrades ?? 0;
     const strategyMaxOpenTrades = resolveStrategyMaxOpenTrades(settings, input.strategy);
-
-    const dailyLoss = closedTrades
-      .filter((trade) => (trade.pnl ?? 0) < 0)
-      .reduce((sum, trade) => sum + Math.abs(trade.pnl ?? 0), 0);
-    const dailyLossPercent = riskReferenceBalance === 0 ? 0 : (dailyLoss / riskReferenceBalance) * 100;
-    const consecutiveLosses = closedTrades.findIndex((trade) => (trade.pnl ?? 0) > 0);
-    const effectiveConsecutiveLosses = consecutiveLosses === -1 ? closedTrades.length : consecutiveLosses;
 
     const maxPositionUsd = settings?.maxPositionUsd ?? 20;
     const positionSize = this.positionSizeService.calculate(
@@ -117,8 +91,6 @@ export class RiskEngineService {
     if (strategyMaxOpenTrades > 0 && strategyTradeCount >= strategyMaxOpenTrades) {
       messages.push(`Max open trades reached for strategy ${input.strategy}`);
     }
-    if (dailyLossPercent >= maxDailyLossPercent) messages.push('Daily loss limit reached');
-    if (effectiveConsecutiveLosses >= maxConsecutiveLosses) messages.push('Max consecutive losses reached');
     const maxSpreadPercent = settings?.maxSpreadPercent ?? 0.4;
     if (input.riskReward < minRiskReward) messages.push('Risk reward below minimum');
     if (input.spread > maxSpreadPercent) messages.push('Spread too high');

@@ -79,21 +79,6 @@ export class ScannerService {
       return { processed: 0, signalsCreated: 0 };
     }
 
-    if (settings?.sessionModeEnabled) {
-      const utcHour = new Date().getUTCHours();
-      const start = settings.tradingWindowStartHourUtc ?? 0;
-      const end = settings.tradingWindowEndHourUtc ?? 24;
-      // Support wrap-around windows (e.g. 22:00–06:00 UTC)
-      const inWindow = start <= end ? utcHour >= start && utcHour < end : utcHour >= start || utcHour < end;
-      if (!inWindow) {
-        await this.logsService.info(
-          'scanner',
-          `Scan skipped: outside trading window ${start}:00–${end}:00 UTC (current: ${utcHour}:00 UTC)`,
-        );
-        return { processed: 0, signalsCreated: 0 };
-      }
-    }
-
     await this.logsService.info('scanner', 'Starting market scan');
     const regime = await this.marketRegimeService.getRegime();
     await this.logsService.info('scanner', `Market regime: ${regime.regime}`, {
@@ -592,29 +577,16 @@ export class ScannerService {
       grouped.set(strategy, bucket);
     }
 
-    const s = settings as any;
-    const maxPositionUsd = s?.maxPositionUsd ?? 15;
-    const strategyDrawdownLimit = -(maxPositionUsd * 1.0);
-
     const healthMap = new Map<string, StrategyHealth>();
     for (const [strategy, bucket] of grouped.entries()) {
       const totalPnl = bucket.reduce((sum, trade) => sum + trade.pnl, 0);
       const consecutiveLosses = bucket.findIndex((trade) => trade.pnl > 0);
       const effectiveConsecutiveLosses = consecutiveLosses === -1 ? bucket.length : consecutiveLosses;
-      let blockedReason: string | undefined;
-
-      const maxConsecLosses = s?.maxConsecutiveLosses ?? 6;
-      if (effectiveConsecutiveLosses >= maxConsecLosses) {
-        blockedReason = `${maxConsecLosses} consecutive losses today`;
-      } else if (bucket.length >= maxConsecLosses && totalPnl < strategyDrawdownLimit) {
-        blockedReason = 'daily strategy drawdown exceeded';
-      }
 
       healthMap.set(strategy, {
         trades: bucket.length,
         totalPnl,
         consecutiveLosses: effectiveConsecutiveLosses,
-        blockedReason,
       });
     }
 
