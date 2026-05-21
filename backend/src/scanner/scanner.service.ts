@@ -201,13 +201,17 @@ export class ScannerService {
 
     // Sort symbols by 24h quote volume descending (most active first).
     // Pre-filter by minimum daily volume and minimum price before the expensive per-symbol candle fetch.
+    // Also skip symbols whose exchange minNotional exceeds our maxPositionUsd — these will always fail
+    // the risk engine notional check and waste a full candle fetch cycle.
+    const maxPositionUsd = settings?.maxPositionUsd ?? 10;
     const tickerMap = new Map(tickers.map((t) => [t.symbol, t]));
     const sorted = enabledSymbols
       .map((s) => ({ record: s, ticker: tickerMap.get(s.symbol) }))
       .filter((item): item is { record: typeof item.record; ticker: NonNullable<typeof item.ticker> } =>
         !!item.ticker &&
         Number(item.ticker.quoteVolume) >= minDailyVolumeUsd &&
-        Number(item.ticker.lastPrice) >= minTokenPrice,
+        Number(item.ticker.lastPrice) >= minTokenPrice &&
+        (item.record.minNotional ?? 0) <= maxPositionUsd,
       )
       .sort((a, b) => Number(b.ticker.quoteVolume) - Number(a.ticker.quoteVolume))
       .slice(0, maxSymbols);
@@ -280,7 +284,7 @@ export class ScannerService {
 
         // Skip coins with insufficient volatility — fees exceed the expected move
         // Skip coins too volatile — stop distance becomes too wide for any R/R to work
-        if (volatility < 0.25 || volatility > 4.0) {
+        if (volatility < 0.15 || volatility > 5.0) {
           filteredPreCandidate += 1;
           continue;
         }
@@ -769,9 +773,8 @@ function getBotVersionTag(): string {
 }
 
 // How long after a trade closes before the same symbol can be re-entered.
-// 4 hours: prevents chasing the same symbol after a stop-out or a win that
-// reversed. 30 min was too short — back-to-back SUI/ONDO entries same day.
-const SYMBOL_COOLDOWN_MS = 4 * 60 * 60_000;
+// 1.5 hours: prevents chasing but allows same-day re-entry after conditions reset.
+const SYMBOL_COOLDOWN_MS = 90 * 60_000;
 
 function randomToken(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;

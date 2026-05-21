@@ -36,6 +36,11 @@ export class BreakoutVolumeStrategy implements TradingStrategy {
       return null;
     }
 
+    const lastCandle = candles15m[candles15m.length - 1]!;
+    const lastCandleBody = Math.abs(lastCandle.close - lastCandle.open);
+    const lastCandleRange = Math.max(lastCandle.high - lastCandle.low, atr14 * 0.1);
+    const candleBodyRatio = lastCandleBody / lastCandleRange;
+
     // Candlestick patterns on the current 15m bar
     const patterns = detectCandlePatterns(candles15m);
 
@@ -68,7 +73,8 @@ export class BreakoutVolumeStrategy implements TradingStrategy {
         patterns.bullishMarubozu ||
         patterns.pinBarBullish ||
         patterns.hammer ||
-        patterns.morningStar;
+        patterns.morningStar ||
+        (lastCandle.close > lastCandle.open && candleBodyRatio >= 0.55);
 
       if (!hasBullishCandle) return null;
 
@@ -141,7 +147,8 @@ export class BreakoutVolumeStrategy implements TradingStrategy {
         patterns.bearishMarubozu ||
         patterns.pinBarBearish ||
         patterns.shootingStar ||
-        patterns.eveningStar;
+        patterns.eveningStar ||
+        (lastCandle.close < lastCandle.open && candleBodyRatio >= 0.55);
 
       if (!hasBearishCandle) return null;
 
