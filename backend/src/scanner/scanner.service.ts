@@ -575,6 +575,22 @@ export class ScannerService {
       .slice(0, 5)
       .map(([reason, count]) => ({ reason, count }));
 
+    // Warn when the scan produced nothing — helps diagnose silent inactivity
+    if (signalsCreated === 0 && sorted.length > 0) {
+      const allStrategiesBlocked = strategyBlockedCounts.size > 0 && noStrategyCandidate + riskRejected === 0;
+      if (allStrategiesBlocked) {
+        const blocked = [...strategyHealth.entries()]
+          .filter(([, h]) => h.blockedReason)
+          .map(([s, h]) => `${s} (${h.consecutiveLosses} consecutive losses)`);
+        await this.logsService.warn('scanner', `No signals — all active strategies paused by consecutive loss limit: ${blocked.join(', ')}`);
+      } else if (noStrategyCandidate >= sorted.length * 0.9) {
+        await this.logsService.warn('scanner', `No signals — market conditions do not match any strategy (${noStrategyCandidate}/${sorted.length} symbols had no setup)`);
+      }
+    }
+    if (sorted.length === 0) {
+      await this.logsService.warn('scanner', 'No symbols passed pre-filter — check minDailyVolumeUsd, enabled symbols, and market conditions');
+    }
+
     await this.logsService.info('scanner', 'Completed market scan', {
       processed,
       signalsCreated,
@@ -723,11 +739,7 @@ export class ScannerService {
   }
 }
 
-function effectiveMinConfidence(base: number, strategy: string): number {
-  // Strategies with historically poor win rates need a higher confidence bar.
-  if (strategy === 'mean_reversion') return base + 5;
-  if (strategy === 'trend_reclaim') return base + 5;
-  if (strategy === 'pullback_continuation') return base + 3;
+function effectiveMinConfidence(base: number, _strategy: string): number {
   return base;
 }
 

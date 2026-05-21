@@ -118,6 +118,8 @@ export class DashboardController {
         signalsCreated: lastScanMeta.signalsCreated,
         topBlockers: lastScanMeta.topBlockers,
         executionMode: lastScanMeta.executionMode,
+        strategyBlockedCounts: lastScanMeta.strategyBlockedCounts,
+        strategyHealth: lastScanMeta.strategyHealth,
       } : null,
     };
   }

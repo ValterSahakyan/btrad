@@ -175,14 +175,35 @@ export default function OverviewPage() {
         </div>
       )}
 
-      {status.lastScanSummary && (status.lastScanSummary as any).topBlockers?.length > 0 && (
-        <div className="rounded border border-white/5 bg-white/[0.02] px-4 py-2.5 text-[12px]">
-          <span className="text-dim">Last scan blockers: </span>
-          {((status.lastScanSummary as any).topBlockers as Array<{ reason: string; count: number }>).map((b) => (
-            <span key={b.reason} className="mr-3 text-warning">{b.reason} ({b.count})</span>
-          ))}
-        </div>
-      )}
+      {status.lastScanSummary && (() => {
+        const scan = status.lastScanSummary as any;
+        const blockedStrategies = scan.strategyHealth
+          ? Object.entries(scan.strategyHealth as Record<string, { consecutiveLosses: number; blockedReason?: string }>)
+              .filter(([, h]) => h.blockedReason)
+          : [];
+        const hasBlockers = scan.topBlockers?.length > 0 || blockedStrategies.length > 0;
+        if (!hasBlockers) return null;
+        return (
+          <div className="rounded border border-warning/20 bg-warning/5 px-4 py-2.5 text-[12px]">
+            {blockedStrategies.length > 0 && (
+              <div className="mb-1">
+                <span className="font-semibold text-warning">Strategies paused by consecutive losses: </span>
+                {blockedStrategies.map(([name, h]) => (
+                  <span key={name} className="mr-3 font-mono text-warning">{name} ({h.consecutiveLosses} losses)</span>
+                ))}
+              </div>
+            )}
+            {scan.topBlockers?.length > 0 && (
+              <div>
+                <span className="text-dim">Signal blockers: </span>
+                {(scan.topBlockers as Array<{ reason: string; count: number }>).map((b) => (
+                  <span key={b.reason} className="mr-3 text-warning/80">{b.reason} ({b.count})</span>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <MetricCard

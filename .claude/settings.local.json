@@ -64,7 +64,8 @@
       "Bash(git branch *)",
       "Bash(npm --workspace backend run test)",
       "Bash(npx --prefix backend prisma db push --schema=backend/prisma/schema.prisma)",
-      "Bash(npx --workspace backend tsc --noEmit)"
+      "Bash(npx --workspace backend tsc --noEmit)",
+      "Bash(npx --workspace frontend tsc --noEmit)"
     ]
   }
 }
