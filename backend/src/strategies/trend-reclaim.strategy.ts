@@ -80,7 +80,7 @@ export class TrendReclaimStrategy implements TradingStrategy {
       context.marketRegime.regime !== 'bearish' &&
       context.marketRegime.regime !== 'no_trade' &&
       ema20 > ema20Prev &&
-      trendStrengthAtr >= 0.28 &&
+      trendStrengthAtr >= 0.22 &&
       prevCandle.low <= ema20 + reclaimBand &&
       lastCandle.close > ema20 &&
       lastCandle.close > lastCandle.open &&
@@ -147,7 +147,7 @@ export class TrendReclaimStrategy implements TradingStrategy {
       context.marketRegime.regime !== 'bullish' &&
       context.marketRegime.regime !== 'no_trade' &&
       ema20 < ema20Prev &&
-      trendStrengthAtr >= 0.28 &&
+      trendStrengthAtr >= 0.22 &&
       prevCandle.high >= ema20 - reclaimBand &&
       lastCandle.close < ema20 &&
       lastCandle.close < lastCandle.open &&

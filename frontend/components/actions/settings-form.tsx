@@ -65,6 +65,7 @@ type SettingsState = {
   rangeBounceTp1Multiplier: number;
   rangeBounceTp2Multiplier: number;
   rangeBounceMinHotScore: number;
+  maxConsecutiveLosses: number;
   fixedRoeEnabled: boolean;
   fixedRoeTpPercent: number;
   fixedRoeSlPercent: number;
@@ -90,8 +91,9 @@ const SECTIONS: Section[] = [
       { key: 'defaultLeverage',       label: 'Default Leverage', unit: 'x' },
       { key: 'maxLeverage',           label: 'Max Leverage',     unit: 'x' },
       { key: 'riskPerTradePercent',   label: 'Risk / Trade',     unit: '%' },
-      { key: 'maxOpenTrades',         label: 'Max Open Trades' },
-      { key: 'maxHoldingHours',       label: 'Max Holding',      unit: 'hours (0=off)' },
+      { key: 'maxOpenTrades',           label: 'Max Open Trades' },
+      { key: 'maxConsecutiveLosses',   label: 'Max Consecutive Losses', unit: 'per strategy/day' },
+      { key: 'maxHoldingHours',         label: 'Max Holding',      unit: 'hours (0=off)' },
       { key: 'maxPositionUsd',        label: 'Max Position',     unit: 'USD' },
       { key: 'minPositionUsd',        label: 'Min Position',     unit: 'USD' },
     ],
@@ -212,6 +214,7 @@ export function SettingsForm({ settings }: { settings: any }) {
     maxLeverage: settings.maxLeverage ?? 5,
     riskPerTradePercent: settings.riskPerTradePercent ?? 1,
     maxOpenTrades: settings.maxOpenTrades ?? 2,
+    maxConsecutiveLosses: settings.maxConsecutiveLosses ?? 5,
     maxHoldingHours: settings.maxHoldingHours ?? 0,
     maxPositionUsd: settings.maxPositionUsd ?? 3,
     minPositionUsd: settings.minPositionUsd ?? 1,

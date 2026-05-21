@@ -102,7 +102,7 @@ export class PullbackContinuationStrategy implements TradingStrategy {
       pullbackDistance >= atr14 * 0.05 &&
       pullbackDistance <= cfg.atrMultiplier * atr14 * 0.85 &&
       recentPullbackLow <= ema20 + atr14 * 0.2 &&
-      trendStrengthAtr >= 0.24 &&
+      trendStrengthAtr >= 0.18 &&
       currentPrice > ema50 &&
       currentPrice >= ema20 &&
       lastCandle.close > lastCandle.open &&
@@ -176,7 +176,7 @@ export class PullbackContinuationStrategy implements TradingStrategy {
       pullbackDistance >= atr14 * 0.05 &&
       pullbackDistance <= cfg.atrMultiplier * atr14 * 0.85 &&
       recentPullbackHigh >= ema20 - atr14 * 0.2 &&
-      trendStrengthAtr >= 0.24 &&
+      trendStrengthAtr >= 0.18 &&
       currentPrice < ema50 &&
       currentPrice <= ema20 &&
       lastCandle.close < lastCandle.open &&

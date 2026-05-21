@@ -50,7 +50,7 @@ export class RangeBounceStrategy implements TradingStrategy {
     // A 1% range gives no room for TP2 and is usually just noise in a trending move.
     // Single-touch S/R is a guess — two or more touches confirm the level is real.
     if (rangeWidthPct < 3) return null;
-    if (supportStrength < 2 || resistanceStrength < 2) return null;
+    if (supportStrength < 2 && resistanceStrength < 2) return null;
 
     // Candlestick patterns — critical at S/R (Steve Nison: "patterns only matter at key levels")
     const patterns = detectCandlePatterns(candles15m);

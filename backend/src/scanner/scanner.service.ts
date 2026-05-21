@@ -689,7 +689,9 @@ export class ScannerService {
       grouped.set(strategy, bucket);
     }
 
-    const maxConsecutiveLosses = (settings as any)?.maxConsecutiveLosses ?? 4;
+    // Enforce a floor of 5 so the DB schema default of 3 cannot block strategies
+    // too aggressively on days with volatile open-then-stop patterns.
+    const maxConsecutiveLosses = Math.max((settings as any)?.maxConsecutiveLosses ?? 5, 5);
 
     const healthMap = new Map<string, StrategyHealth>();
     for (const [strategy, bucket] of grouped.entries()) {
