@@ -673,16 +673,23 @@ export class ScannerService {
       grouped.set(strategy, bucket);
     }
 
+    const maxConsecutiveLosses = (settings as any)?.maxConsecutiveLosses ?? 4;
+
     const healthMap = new Map<string, StrategyHealth>();
     for (const [strategy, bucket] of grouped.entries()) {
       const totalPnl = bucket.reduce((sum, trade) => sum + trade.pnl, 0);
       const consecutiveLosses = bucket.findIndex((trade) => trade.pnl > 0);
       const effectiveConsecutiveLosses = consecutiveLosses === -1 ? bucket.length : consecutiveLosses;
+      const blockedReason =
+        effectiveConsecutiveLosses >= maxConsecutiveLosses
+          ? `${effectiveConsecutiveLosses} consecutive losses today — strategy paused until tomorrow`
+          : undefined;
 
       healthMap.set(strategy, {
         trades: bucket.length,
         totalPnl,
         consecutiveLosses: effectiveConsecutiveLosses,
+        blockedReason,
       });
     }
 
@@ -748,8 +755,9 @@ function getBotVersionTag(): string {
 }
 
 // How long after a trade closes before the same symbol can be re-entered.
-// Prevents the scanner from immediately chasing a move that just finished.
-const SYMBOL_COOLDOWN_MS = 30 * 60_000;
+// 4 hours: prevents chasing the same symbol after a stop-out or a win that
+// reversed. 30 min was too short — back-to-back SUI/ONDO entries same day.
+const SYMBOL_COOLDOWN_MS = 4 * 60 * 60_000;
 
 function randomToken(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
