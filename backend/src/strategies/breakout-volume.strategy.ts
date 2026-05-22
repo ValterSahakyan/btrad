@@ -61,10 +61,11 @@ export class BreakoutVolumeStrategy implements TradingStrategy {
     // ── LONG ──────────────────────────────────────────────────────────────────
     if (
       currentPrice > ema50 &&
+      currentPrice > ema200 &&
       breakout.longBreakout &&
+      structure.breakOfStructure &&
       context.marketRegime.regime !== 'bearish' &&
       context.marketRegime.regime !== 'no_trade' &&
-      // 4h alignment: only enter if 4h is not bearish
       htf4Trend !== 'bearish'
     ) {
       // Require at least one bullish candle confirmation (Steve Nison / Al Brooks)
@@ -137,7 +138,9 @@ export class BreakoutVolumeStrategy implements TradingStrategy {
     // ── SHORT ─────────────────────────────────────────────────────────────────
     if (
       currentPrice < ema50 &&
+      currentPrice < ema200 &&
       breakout.shortBreakout &&
+      structure.breakOfStructure &&
       context.marketRegime.regime !== 'bullish' &&
       context.marketRegime.regime !== 'no_trade' &&
       htf4Trend !== 'bullish'
