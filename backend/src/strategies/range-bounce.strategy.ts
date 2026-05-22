@@ -4,6 +4,7 @@ import { atr } from '../indicators/atr';
 import { detectCandlePatterns } from '../indicators/candlestick-patterns';
 import { rsi } from '../indicators/rsi';
 import { detectSupportResistance, detectSwingLevels } from '../indicators/support-resistance';
+import { detectTrend } from '../indicators/trend';
 import { sessionScoreAdjustment } from '../settings/session-filter';
 import { StrategyContext, TradingStrategy } from './strategy.interface';
 
@@ -41,6 +42,10 @@ export class RangeBounceStrategy implements TradingStrategy {
     if (context.hotScore < cfg.minHotScore || context.spread > 0.45) return null;
     if (context.marketRegime.regime === 'no_trade' || context.marketRegime.regime === 'high_volatility') return null;
 
+    // Coin-level trend — range bounce only makes sense when the coin itself is not trending hard.
+    // Market regime is BTC/ETH-based; a coin can be in a strong individual trend while BTC is neutral.
+    const coinTrend1h = detectTrend(candles1h);
+
     const supportDistance = Math.abs(current.low - support);
     const resistanceDistance = Math.abs(current.high - resistance);
     const nearSupport = supportDistance <= atr14 * cfg.proximityAtr;
@@ -69,7 +74,8 @@ export class RangeBounceStrategy implements TradingStrategy {
       current.close > current.open &&
       prev.close < prev.open &&
       currentRsi <= cfg.rsiLongMax &&
-      context.marketRegime.regime !== 'bearish'
+      context.marketRegime.regime !== 'bearish' &&
+      coinTrend1h !== 'bearish'
     ) {
       // REQUIRE a bullish rejection candle at support (Nison — the candle confirms the level)
       const hasBullishRejection =
@@ -125,7 +131,8 @@ export class RangeBounceStrategy implements TradingStrategy {
       current.close < current.open &&
       prev.close > prev.open &&
       currentRsi >= cfg.rsiShortMin &&
-      context.marketRegime.regime !== 'bullish'
+      context.marketRegime.regime !== 'bullish' &&
+      coinTrend1h !== 'bullish'
     ) {
       const hasBearishRejection =
         patterns.shootingStar ||

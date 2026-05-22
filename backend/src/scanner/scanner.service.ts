@@ -209,6 +209,7 @@ export class ScannerService {
       .map((s) => ({ record: s, ticker: tickerMap.get(s.symbol) }))
       .filter((item): item is { record: typeof item.record; ticker: NonNullable<typeof item.ticker> } =>
         !!item.ticker &&
+        /^[A-Z0-9]+$/.test(item.record.symbol) &&
         Number(item.ticker.quoteVolume) >= minDailyVolumeUsd &&
         Number(item.ticker.lastPrice) >= minTokenPrice &&
         (item.record.minNotional ?? 0) <= maxPositionUsd,
