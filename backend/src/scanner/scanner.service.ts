@@ -178,19 +178,6 @@ export class ScannerService {
     // poor fill quality. Even if they meet the volume filter, their price dynamics
     // make reliable pattern recognition nearly impossible.
     const minTokenPrice = 0.01;
-    const effectiveMaxOpenTrades = settings?.maxOpenTrades ?? 2;
-    const currentOpenTradeCount = await this.prisma.trade.count({ where: { status: 'live_open' } });
-    if (currentOpenTradeCount >= effectiveMaxOpenTrades) {
-      await this.logsService.info('scanner', 'Scan skipped: max open trades already reached', {
-        currentOpenTrades: currentOpenTradeCount,
-        maxOpenTrades: effectiveMaxOpenTrades,
-      });
-      return { processed: 0, signalsCreated: 0 };
-    }
-    // Cap auto-executes this scan to remaining available slots.
-    // Without this, every void autoExecute fires concurrently and all pass the
-    // maxOpenTrades check before any of them commits a trade row.
-    const autoExecuteSlotsRemaining = Math.max(0, effectiveMaxOpenTrades - currentOpenTradeCount);
     let autoExecutedThisScan = 0;
     const strategyHealth = await this.buildStrategyHealthMap(settings);
 
@@ -559,7 +546,7 @@ export class ScannerService {
         // Re-check isPaused using the freshSettings read at the top of this iteration.
         // Closes the window between the per-symbol pause check and signal creation.
         // approveLive() also checks, but preventing the call entirely is cleaner.
-        if (autoExecute && !freshSettings?.isPaused && autoExecutedThisScan < autoExecuteSlotsRemaining) {
+        if (autoExecute && !freshSettings?.isPaused) {
           autoExecutedThisScan += 1;
           void this.autoExecute(signal.id).catch(async (err: unknown) => {
             await this.logsService.error('scanner', `Auto-execute failed for ${symbolRecord.symbol}`, {

@@ -454,16 +454,10 @@ export class PositionMonitorService implements OnModuleInit {
     if (!settings.realTradingEnabled) return;
     if (settings.requireDashboardConfirmation !== false) return;
 
-    const maxOpenTrades = settings.maxOpenTrades ?? 0;
-    if (maxOpenTrades <= 0) return;
-
     const openTrades = await this.prisma.trade.findMany({
       where: { status: 'live_open' },
       select: { symbol: true },
     });
-    const availableSlots = maxOpenTrades - openTrades.length;
-    if (availableSlots <= 0) return;
-
     const openSymbols = new Set(openTrades.map((trade) => trade.symbol));
 
     // Symbols that closed recently are on cooldown — skip them even if a signal exists.
@@ -484,13 +478,12 @@ export class PositionMonitorService implements OnModuleInit {
       },
       include: { symbol: true },
       orderBy: [{ confidenceScore: 'desc' }, { createdAt: 'asc' }],
-      take: Math.max(availableSlots * 4, 10),
+      take: 50,
     });
 
     let executed = 0;
 
     for (const signal of candidates) {
-      if (executed >= availableSlots) break;
       if (openSymbols.has(signal.symbol.symbol)) continue;
       if (cooledDownSymbols.has(signal.symbol.symbol)) continue;
 
@@ -507,10 +500,7 @@ export class PositionMonitorService implements OnModuleInit {
     }
 
     if (executed > 0) {
-      await this.logsService.info('monitor', 'Auto-refilled open live trade slots', {
-        executed,
-        maxOpenTrades,
-      });
+      await this.logsService.info('monitor', 'Auto-refilled open live trade slots', { executed });
     }
   }
 
@@ -526,9 +516,6 @@ export class PositionMonitorService implements OnModuleInit {
       where: { status: 'live_open' },
       select: { symbol: true },
     });
-    const maxOpenTrades = settings.maxOpenTrades ?? 0;
-    if (openTrades.length >= maxOpenTrades) return;
-
     const openSymbols = openTrades.map((trade) => trade.symbol);
     const queuedSignals = await this.prisma.signal.count({
       where: {
@@ -543,7 +530,6 @@ export class PositionMonitorService implements OnModuleInit {
     const scan = await this.scannerService.runScan();
     await this.logsService.info('monitor', 'Triggered immediate scan to maintain continuous live trading', {
       openTrades: openTrades.length,
-      maxOpenTrades,
       processed: scan.processed,
       signalsCreated: scan.signalsCreated,
       skipped: scan.skipped ?? false,
