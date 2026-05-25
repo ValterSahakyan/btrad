@@ -65,6 +65,11 @@ type SettingsState = {
   rangeBounceTp1Multiplier: number;
   rangeBounceTp2Multiplier: number;
   rangeBounceMinHotScore: number;
+  breakoutMaxOpenTrades: number;
+  pullbackMaxOpenTrades: number;
+  reversionMaxOpenTrades: number;
+  trendReclaimMaxOpenTrades: number;
+  rangeBounceMaxOpenTrades: number;
   maxConsecutiveLosses: number;
   fixedRoeEnabled: boolean;
   fixedRoeTpPercent: number;
@@ -131,6 +136,7 @@ const SECTIONS: Section[] = [
       { key: 'breakoutTp1Multiplier',   label: 'TP1 Mult.',         unit: 'x risk' },
       { key: 'breakoutTp2Multiplier',   label: 'TP2 Mult.',         unit: 'x risk' },
       { key: 'breakoutMinHotScore',     label: 'Min Hot Score' },
+      { key: 'breakoutMaxOpenTrades',   label: 'Max Open Trades', unit: '0=unlimited', min: 0 },
     ],
   },
   {
@@ -146,7 +152,8 @@ const SECTIONS: Section[] = [
       { key: 'pullbackMaxSlPercent',    label: 'Max SL',            unit: '%' },
       { key: 'pullbackTp1Multiplier',   label: 'TP1 Mult.',         unit: 'x risk' },
       { key: 'pullbackTp2Multiplier',   label: 'TP2 Mult.',         unit: 'x risk' },
-      { key: 'pullbackMinHotScore',     label: 'Min Hot Score' },
+      { key: 'pullbackMinHotScore',      label: 'Min Hot Score' },
+      { key: 'pullbackMaxOpenTrades',   label: 'Max Open Trades', unit: '0=unlimited', min: 0 },
     ],
   },
   {
@@ -159,6 +166,7 @@ const SECTIONS: Section[] = [
       { key: 'reversionVwapDeviationPct',     label: 'VWAP Deviation',  unit: '%' },
       { key: 'reversionVolumeDeclineRatio',   label: 'Vol. Decline',    unit: 'of peak' },
       { key: 'reversionMaxSlPercent',         label: 'Max SL',          unit: '%' },
+      { key: 'reversionMaxOpenTrades',        label: 'Max Open Trades', unit: '0=unlimited', min: 0 },
     ],
   },
   {
@@ -172,6 +180,7 @@ const SECTIONS: Section[] = [
       { key: 'trendReclaimTp1Multiplier',  label: 'TP1 Mult.',         unit: 'x risk' },
       { key: 'trendReclaimTp2Multiplier',  label: 'TP2 Mult.',         unit: 'x risk' },
       { key: 'trendReclaimMinHotScore',    label: 'Min Hot Score' },
+      { key: 'trendReclaimMaxOpenTrades', label: 'Max Open Trades', unit: '0=unlimited', min: 0 },
     ],
   },
   {
@@ -187,6 +196,7 @@ const SECTIONS: Section[] = [
       { key: 'rangeBounceTp1Multiplier',   label: 'TP1 Mult.',         unit: 'x risk' },
       { key: 'rangeBounceTp2Multiplier',   label: 'TP2 Mult.',         unit: 'x risk' },
       { key: 'rangeBounceMinHotScore',     label: 'Min Hot Score' },
+      { key: 'rangeBounceMaxOpenTrades',  label: 'Max Open Trades', unit: '0=unlimited', min: 0 },
     ],
   },
 ];
@@ -265,6 +275,11 @@ export function SettingsForm({ settings }: { settings: any }) {
     rangeBounceTp1Multiplier: settings.rangeBounceTp1Multiplier ?? 1.3,
     rangeBounceTp2Multiplier: settings.rangeBounceTp2Multiplier ?? 2,
     rangeBounceMinHotScore: settings.rangeBounceMinHotScore ?? 35,
+    breakoutMaxOpenTrades: settings.breakoutMaxOpenTrades ?? 0,
+    pullbackMaxOpenTrades: settings.pullbackMaxOpenTrades ?? 0,
+    reversionMaxOpenTrades: settings.reversionMaxOpenTrades ?? 0,
+    trendReclaimMaxOpenTrades: settings.trendReclaimMaxOpenTrades ?? 0,
+    rangeBounceMaxOpenTrades: settings.rangeBounceMaxOpenTrades ?? 0,
     fixedRoeEnabled: settings.fixedRoeEnabled ?? false,
     fixedRoeTpPercent: settings.fixedRoeTpPercent ?? 20,
     fixedRoeSlPercent: settings.fixedRoeSlPercent ?? 20,

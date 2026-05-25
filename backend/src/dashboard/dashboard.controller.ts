@@ -765,11 +765,6 @@ function normalizeSettingsUpdate(body: UpdateSettingsDto): UpdateSettingsDto {
   delete (normalized as UpdateSettingsDto & { weekendMaxPositionUsd?: number }).weekendMaxPositionUsd;
   delete (normalized as UpdateSettingsDto & { maxLongOpenTrades?: number }).maxLongOpenTrades;
   delete (normalized as UpdateSettingsDto & { maxShortOpenTrades?: number }).maxShortOpenTrades;
-  delete (normalized as UpdateSettingsDto & { breakoutMaxOpenTrades?: number }).breakoutMaxOpenTrades;
-  delete (normalized as UpdateSettingsDto & { pullbackMaxOpenTrades?: number }).pullbackMaxOpenTrades;
-  delete (normalized as UpdateSettingsDto & { reversionMaxOpenTrades?: number }).reversionMaxOpenTrades;
-  delete (normalized as UpdateSettingsDto & { trendReclaimMaxOpenTrades?: number }).trendReclaimMaxOpenTrades;
-  delete (normalized as UpdateSettingsDto & { rangeBounceMaxOpenTrades?: number }).rangeBounceMaxOpenTrades;
 
   if (body.enableRealTrading !== undefined) {
     normalized.realTradingEnabled = body.enableRealTrading;
@@ -795,11 +790,6 @@ function serializeSettings<T extends { realTradingEnabled: boolean; requireDashb
     weekendMaxPositionUsd: _weekendMaxPositionUsd,
     maxLongOpenTrades: _maxLongOpenTrades,
     maxShortOpenTrades: _maxShortOpenTrades,
-    breakoutMaxOpenTrades: _breakoutMaxOpenTrades,
-    pullbackMaxOpenTrades: _pullbackMaxOpenTrades,
-    reversionMaxOpenTrades: _reversionMaxOpenTrades,
-    trendReclaimMaxOpenTrades: _trendReclaimMaxOpenTrades,
-    rangeBounceMaxOpenTrades: _rangeBounceMaxOpenTrades,
     ...rest
   } = settings as T & {
     isPaused?: boolean;
@@ -811,11 +801,6 @@ function serializeSettings<T extends { realTradingEnabled: boolean; requireDashb
     weekendMaxPositionUsd?: number;
     maxLongOpenTrades?: number;
     maxShortOpenTrades?: number;
-    breakoutMaxOpenTrades?: number;
-    pullbackMaxOpenTrades?: number;
-    reversionMaxOpenTrades?: number;
-    trendReclaimMaxOpenTrades?: number;
-    rangeBounceMaxOpenTrades?: number;
   };
   return {
     ...rest,

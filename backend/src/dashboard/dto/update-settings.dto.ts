@@ -382,4 +382,29 @@ export class UpdateSettingsDto {
   @Min(0)
   @Max(100)
   rangeBounceMinHotScore?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  breakoutMaxOpenTrades?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  pullbackMaxOpenTrades?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  reversionMaxOpenTrades?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  trendReclaimMaxOpenTrades?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  rangeBounceMaxOpenTrades?: number;
 }
