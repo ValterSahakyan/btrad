@@ -203,9 +203,17 @@ export class OrderExecutionService {
     // ── Stop-loss STOP_MARKET ─────────────────────────────────────────────────
     // CRITICAL: if this fails we close the position immediately — never leave
     // real money in an unprotected position.
-    // If the original SL is rejected (price moved past it between entry and SL placement),
-    // retry once with SL at current mark price ±0.6% before emergency close.
-    const placeSl = async (stopPrice: number, clientOrderId: string) =>
+    //
+    // Retry strategy (3 attempts):
+    //   1. Original SL price + MARK_PRICE trigger (standard path)
+    //   2. Mark-price-adjusted SL ±2% + MARK_PRICE (price moved since signal)
+    //   3. Mark-price-adjusted SL ±2% + CONTRACT_PRICE (fallback for accounts
+    //      where MARK_PRICE conditional orders are restricted)
+    const placeSl = async (
+      stopPrice: number,
+      clientOrderId: string,
+      workingType: 'MARK_PRICE' | 'CONTRACT_PRICE' = 'MARK_PRICE',
+    ) =>
       this.binanceService.placeOrder({
         symbol: sym.symbol,
         side: closeSide,
@@ -214,10 +222,11 @@ export class OrderExecutionService {
         stopPrice: Number(stopPrice.toFixed(sym.pricePrecision)),
         reduceOnly: true,
         clientOrderId,
+        workingType,
       });
 
     let slResult = await placeSl(signal.stopLoss, `${idPrefix}-sl-${ts}-${rand}`).catch(async (err) => {
-      await this.logsService.warn('execution', 'SL order failed — retrying with adjusted price', {
+      await this.logsService.warn('execution', 'SL attempt 1 failed — retrying with adjusted price', {
         symbol: sym.symbol,
         error: err instanceof Error ? err.message : String(err),
         originalSl: signal.stopLoss,
@@ -225,30 +234,43 @@ export class OrderExecutionService {
         tradeId: trade.id,
       });
 
-      // Price likely moved past the original SL. Fetch current mark price and retry
-      // with a safety-buffer SL so the position is always protected.
+      // Fetch current mark price; retry at ±2% buffer — large enough for fast-moving markets.
       const markNow = await this.binanceService.fetchMarkPrice(sym.symbol).catch(() => null);
-      if (markNow) {
-        const adjustedSl = signal.direction === 'LONG'
-          ? Number((markNow * 0.994).toFixed(sym.pricePrecision))
-          : Number((markNow * 1.006).toFixed(sym.pricePrecision));
-        return placeSl(adjustedSl, `${idPrefix}-sl2-${ts}-${rand}`).catch(async (err2) => {
-          await this.logsService.error('execution', 'Adjusted SL also failed — closing position for safety', {
-            symbol: sym.symbol,
-            error: err2 instanceof Error ? err2.message : String(err2),
-            adjustedSl,
-            signalId,
-            tradeId: trade.id,
-          });
-          return null;
+      if (markNow === null) return null;
+
+      const adjustedSl = signal.direction === 'LONG'
+        ? Number((markNow * 0.98).toFixed(sym.pricePrecision))
+        : Number((markNow * 1.02).toFixed(sym.pricePrecision));
+
+      // Attempt 2: MARK_PRICE with wider buffer
+      const attempt2 = await placeSl(adjustedSl, `${idPrefix}-sl2-${ts}-${rand}`).catch(async (err2) => {
+        await this.logsService.warn('execution', 'SL attempt 2 (MARK_PRICE) failed — retrying with CONTRACT_PRICE', {
+          symbol: sym.symbol,
+          error: err2 instanceof Error ? err2.message : String(err2),
+          adjustedSl,
+          signalId,
+          tradeId: trade.id,
         });
-      }
-      return null;
+        return null;
+      });
+      if (attempt2) return attempt2;
+
+      // Attempt 3: CONTRACT_PRICE (fallback for accounts where MARK_PRICE triggers are restricted)
+      return placeSl(adjustedSl, `${idPrefix}-sl3-${ts}-${rand}`, 'CONTRACT_PRICE').catch(async (err3) => {
+        await this.logsService.error('execution', 'SL attempt 3 (CONTRACT_PRICE) also failed — emergency close', {
+          symbol: sym.symbol,
+          error: err3 instanceof Error ? err3.message : String(err3),
+          adjustedSl,
+          signalId,
+          tradeId: trade.id,
+        });
+        return null;
+      });
     });
 
     if (!slResult) {
       // Emergency close — get out of the position immediately
-      await this.binanceService
+      const closeResult = await this.binanceService
         .placeOrder({
           symbol: sym.symbol,
           side: closeSide,
@@ -268,11 +290,24 @@ export class OrderExecutionService {
               error: closeErr instanceof Error ? closeErr.message : String(closeErr),
             },
           );
+          return null;
         });
+
+      // Record actual PnL from the emergency close fill, if available
+      const closePrice = closeResult ? (Number(closeResult.avgPrice) || fillPrice) : fillPrice;
+      const dirMult = signal.direction === 'LONG' ? 1 : -1;
+      const emergencyPnl = (closePrice - fillPrice) * quantity * dirMult;
+      const emergencyPnlPct = actualMargin > 0 ? (emergencyPnl / actualMargin) * 100 : 0;
 
       await this.prisma.trade.update({
         where: { id: trade.id },
-        data: { status: 'failed', closedAt: new Date() },
+        data: {
+          status: 'failed',
+          closedAt: new Date(),
+          exitPrice: Number(closePrice.toFixed(8)),
+          pnl: Number(emergencyPnl.toFixed(4)),
+          pnlPercent: Number(emergencyPnlPct.toFixed(2)),
+        },
       });
       await this.prisma.signal.update({ where: { id: signalId }, data: { status: 'failed' } });
       throw new BadRequestException('SL order failed — emergency close executed. Check Binance manually.');

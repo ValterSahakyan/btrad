@@ -225,7 +225,7 @@ export class BinanceService {
       stopPrice: input.stopPrice,
       reduceOnly: useClosePosition ? undefined : input.reduceOnly,
       closePosition: useClosePosition ? true : undefined,
-      workingType: isConditional ? 'MARK_PRICE' : undefined,
+      workingType: isConditional ? (input.workingType ?? 'MARK_PRICE') : undefined,
       newClientOrderId: input.clientOrderId,
       timeInForce: input.type === 'LIMIT' ? 'GTC' : undefined,
     });
