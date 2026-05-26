@@ -212,12 +212,13 @@ export class PositionMonitorService implements OnModuleInit {
       const positionSide = posMode === 'hedge'
         ? (trade.direction === 'LONG' ? 'LONG' : 'SHORT') as 'LONG' | 'SHORT'
         : ('BOTH' as const);
+      const closeReduceOnly = posMode === 'one-way' ? true : undefined;
       const closeResult = await this.binanceService.placeOrder({
         symbol: trade.symbol,
         side,
         type: 'MARKET',
         quantity: trade.quantity,
-        reduceOnly: true,
+        reduceOnly: closeReduceOnly,
         positionSide,
         clientOrderId: `${trade.id.slice(0, 8)}-timeout-${ts}`,
       });
@@ -406,13 +407,14 @@ export class PositionMonitorService implements OnModuleInit {
         const positionSide = posMode === 'hedge'
           ? (trade.direction === 'LONG' ? 'LONG' : 'SHORT') as 'LONG' | 'SHORT'
           : ('BOTH' as const);
+        const closeReduceOnly = posMode === 'one-way' ? true : undefined;
         const newSlResult = await this.binanceService.placeOrder({
           symbol: trade.symbol,
           side,
           type: 'STOP_MARKET',
           quantity: trade.quantity,
           stopPrice: bePrice,
-          reduceOnly: true,
+          reduceOnly: closeReduceOnly,
           positionSide,
           clientOrderId: `${trade.id.slice(0, 8)}-be-${ts}`,
         });

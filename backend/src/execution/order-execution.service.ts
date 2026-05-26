@@ -167,6 +167,9 @@ export class OrderExecutionService {
     const positionSide = posMode === 'hedge'
       ? (signal.direction === 'LONG' ? 'LONG' : 'SHORT') as 'LONG' | 'SHORT'
       : ('BOTH' as const);
+    // Hedge Mode explicitly prohibits reduceOnly — Binance returns -4088 if sent.
+    // One-Way Mode requires it on close orders to prevent accidentally opening a new position.
+    const closeReduceOnly = posMode === 'one-way' ? true : undefined;
 
     // ── Entry MARKET order ───────────────────────────────────────────────────
     const entryResult = await this.binanceService.placeOrder({
@@ -230,7 +233,7 @@ export class OrderExecutionService {
         type: 'STOP_MARKET',
         quantity,
         stopPrice: Number(stopPrice.toFixed(sym.pricePrecision)),
-        reduceOnly: true,
+        reduceOnly: closeReduceOnly,
         positionSide,
         clientOrderId,
         workingType,
@@ -287,7 +290,7 @@ export class OrderExecutionService {
           side: closeSide,
           type: 'MARKET',
           quantity,
-          reduceOnly: true,
+          reduceOnly: closeReduceOnly,
           positionSide,
           clientOrderId: `${idPrefix}-emergency-${ts}-${rand}`,
         })
@@ -366,7 +369,7 @@ export class OrderExecutionService {
           type: 'TAKE_PROFIT_MARKET',
           quantity: halfQty,
           stopPrice: Number(signal.takeProfit1.toFixed(sym.pricePrecision)),
-          reduceOnly: true,
+          reduceOnly: closeReduceOnly,
           positionSide,
           clientOrderId: `${idPrefix}-tp1-${ts}-${rand}`,
         })
@@ -403,7 +406,7 @@ export class OrderExecutionService {
           type: 'TAKE_PROFIT_MARKET',
           quantity: halfQty,
           stopPrice: Number(signal.takeProfit2.toFixed(sym.pricePrecision)),
-          reduceOnly: true,
+          reduceOnly: closeReduceOnly,
           positionSide,
           clientOrderId: `${idPrefix}-tp2-${ts}-${rand}`,
         })
@@ -441,7 +444,7 @@ export class OrderExecutionService {
           type: 'TAKE_PROFIT_MARKET',
           quantity,
           stopPrice: Number(signal.takeProfit2.toFixed(sym.pricePrecision)),
-          reduceOnly: true,
+          reduceOnly: closeReduceOnly,
           positionSide,
           clientOrderId: `${idPrefix}-tp2-${ts}-${rand}`,
         })

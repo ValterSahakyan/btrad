@@ -101,12 +101,7 @@ export class TradesService {
     // Cancel only the SL/TP orders that belong to this trade
     const openOrders = trade.orders.filter((o) => o.status === 'open' && o.binanceOrderId);
     for (const order of openOrders) {
-      const cancelRequest =
-        order.type === 'STOP_MARKET' || order.type === 'TAKE_PROFIT_MARKET'
-          ? this.binanceService.cancelAlgoOrder(order.binanceOrderId!)
-          : this.binanceService.cancelOrder(trade.symbol, order.binanceOrderId!);
-
-      await cancelRequest.catch(async (err) => {
+      await this.binanceService.cancelOrder(trade.symbol, order.binanceOrderId!).catch(async (err) => {
         await this.logsService.warn('trades', `Failed to cancel order ${order.binanceOrderId}`, {
           tradeId: id,
           symbol: trade.symbol,
@@ -123,6 +118,11 @@ export class TradesService {
 
     const side = trade.direction === 'LONG' ? 'SELL' : 'BUY';
     const ts = Date.now();
+    const posMode = await this.binanceService.getPositionMode();
+    const positionSide = posMode === 'hedge'
+      ? (trade.direction === 'LONG' ? 'LONG' : 'SHORT') as 'LONG' | 'SHORT'
+      : ('BOTH' as const);
+    const closeReduceOnly = posMode === 'one-way' ? true : undefined;
 
     let exitPrice: number;
     const closeResult = await this.binanceService.placeOrder({
@@ -130,7 +130,8 @@ export class TradesService {
       side,
       type: 'MARKET',
       quantity: trade.quantity,
-      reduceOnly: true,
+      reduceOnly: closeReduceOnly,
+      positionSide,
       clientOrderId: `${id.slice(0, 8)}-close-${ts}`,
     }).catch(async (err) => {
       // Position may have already been closed by SL/TP on the exchange.
