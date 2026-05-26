@@ -71,30 +71,9 @@ export class OrderExecutionService {
       throw new BadRequestException('Bot must be in live mode to place live orders');
     }
 
-    // Re-check limits at execution time (may have changed since signal was created).
-    // These reads are independent, so run them together to reduce entry latency.
-    const [openTradeRows, existingTrade] = await Promise.all([
-      this.prisma.trade.findMany({
-        where: { status: 'live_open' },
-        select: {
-          direction: true,
-          signal: {
-            select: {
-              strategy: true,
-            },
-          },
-        },
-      }),
-      this.prisma.trade.findFirst({
-        where: { symbol: signal.symbol.symbol, status: 'live_open' },
-      }),
-    ]);
-    const openTrades = openTradeRows.length;
-    if (openTrades >= (settings.maxOpenTrades ?? 2)) {
-      await revertToActive();
-      throw new BadRequestException(`Max open trades limit reached (${settings.maxOpenTrades})`);
-    }
-
+    const existingTrade = await this.prisma.trade.findFirst({
+      where: { symbol: signal.symbol.symbol, status: 'live_open' },
+    });
     if (existingTrade) {
       await revertToActive();
       throw new BadRequestException(`A live trade for ${signal.symbol.symbol} is already open`);
@@ -159,17 +138,7 @@ export class OrderExecutionService {
       throw new BadRequestException(`A live trade for ${signal.symbol.symbol} is already open`);
     }
 
-    // Third guard — global max-open-trades race.
-    // When multiple signals are auto-executed concurrently (fire-and-forget void calls),
-    // ALL of them pass the first count check (lines 84-88) before any commits a trade row.
-    // This final read, taken just before any exchange contact, is the definitive gate.
-    const finalOpenCount = await this.prisma.trade.count({ where: { status: 'live_open' } });
-    if (finalOpenCount >= (settings.maxOpenTrades ?? 2)) {
-      await revertToActive();
-      throw new BadRequestException(`Max open trades reached at execution time (${finalOpenCount}/${settings.maxOpenTrades ?? 2})`);
-    }
-
-    // Fourth guard — isPaused re-check at the point of no return.
+    // Third guard — isPaused re-check at the point of no return.
     // Stop may have fired after the first check. Any call past this line touches Binance.
     const pauseCheck = await this.prisma.botSettings.findFirst();
     if (pauseCheck?.isPaused) {
@@ -234,25 +203,48 @@ export class OrderExecutionService {
     // ── Stop-loss STOP_MARKET ─────────────────────────────────────────────────
     // CRITICAL: if this fails we close the position immediately — never leave
     // real money in an unprotected position.
-    const slResult = await this.binanceService
-      .placeOrder({
+    // If the original SL is rejected (price moved past it between entry and SL placement),
+    // retry once with SL at current mark price ±0.6% before emergency close.
+    const placeSl = async (stopPrice: number, clientOrderId: string) =>
+      this.binanceService.placeOrder({
         symbol: sym.symbol,
         side: closeSide,
         type: 'STOP_MARKET',
         quantity,
-        stopPrice: Number(signal.stopLoss.toFixed(sym.pricePrecision)),
+        stopPrice: Number(stopPrice.toFixed(sym.pricePrecision)),
         reduceOnly: true,
-        clientOrderId: `${idPrefix}-sl-${ts}-${rand}`,
-      })
-      .catch(async (err) => {
-        await this.logsService.error('execution', 'SL order failed — closing position for safety', {
-          symbol: sym.symbol,
-          error: err instanceof Error ? err.message : String(err),
-          signalId,
-          tradeId: trade.id,
-        });
-        return null;
+        clientOrderId,
       });
+
+    let slResult = await placeSl(signal.stopLoss, `${idPrefix}-sl-${ts}-${rand}`).catch(async (err) => {
+      await this.logsService.warn('execution', 'SL order failed — retrying with adjusted price', {
+        symbol: sym.symbol,
+        error: err instanceof Error ? err.message : String(err),
+        originalSl: signal.stopLoss,
+        signalId,
+        tradeId: trade.id,
+      });
+
+      // Price likely moved past the original SL. Fetch current mark price and retry
+      // with a safety-buffer SL so the position is always protected.
+      const markNow = await this.binanceService.fetchMarkPrice(sym.symbol).catch(() => null);
+      if (markNow) {
+        const adjustedSl = signal.direction === 'LONG'
+          ? Number((markNow * 0.994).toFixed(sym.pricePrecision))
+          : Number((markNow * 1.006).toFixed(sym.pricePrecision));
+        return placeSl(adjustedSl, `${idPrefix}-sl2-${ts}-${rand}`).catch(async (err2) => {
+          await this.logsService.error('execution', 'Adjusted SL also failed — closing position for safety', {
+            symbol: sym.symbol,
+            error: err2 instanceof Error ? err2.message : String(err2),
+            adjustedSl,
+            signalId,
+            tradeId: trade.id,
+          });
+          return null;
+        });
+      }
+      return null;
+    });
 
     if (!slResult) {
       // Emergency close — get out of the position immediately
