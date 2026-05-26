@@ -189,10 +189,7 @@ export class PositionMonitorService implements OnModuleInit {
     try {
       const openOrders = trade.orders.filter((order) => order.status === 'open' && order.binanceOrderId);
       for (const order of openOrders) {
-        const cancelRequest =
-          order.type === 'STOP_MARKET' || order.type === 'TAKE_PROFIT_MARKET'
-            ? this.binanceService.cancelAlgoOrder(order.binanceOrderId!)
-            : this.binanceService.cancelOrder(trade.symbol, order.binanceOrderId!);
+        const cancelRequest = this.binanceService.cancelOrder(trade.symbol, order.binanceOrderId!);
 
         await cancelRequest.catch(async (err) => {
           await this.logsService.warn('monitor', `Failed to cancel timeout order ${order.binanceOrderId}`, {
@@ -383,7 +380,7 @@ export class PositionMonitorService implements OnModuleInit {
         );
 
         // Cancel the existing SL
-        await this.binanceService.cancelAlgoOrder(openSl.binanceOrderId).catch(async (err) => {
+        await this.binanceService.cancelOrder(trade.symbol, openSl.binanceOrderId!).catch(async (err) => {
           await this.logsService.warn('monitor', `Breakeven: failed to cancel old SL for ${trade.symbol}`, {
             tradeId: trade.id,
             binanceOrderId: openSl.binanceOrderId,

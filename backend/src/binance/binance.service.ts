@@ -213,37 +213,8 @@ export class BinanceService {
   }
 
   async placeOrder(input: PlaceOrderInput): Promise<BinanceOrderResult> {
-    const isConditional = input.type === 'STOP_MARKET' || input.type === 'TAKE_PROFIT_MARKET';
-    // When closePosition=true, quantity and reduceOnly must be omitted (Binance requirement)
     const useClosePosition = input.closePosition === true;
-    if (isConditional) {
-      const response = await this.signedRequest<BinanceAlgoOrderResponse>('POST', '/fapi/v1/algoOrder', {
-        algoType: 'CONDITIONAL',
-        symbol: input.symbol,
-        side: input.side,
-        type: input.type,
-        quantity: useClosePosition ? undefined : input.quantity,
-        price: input.price,
-        triggerPrice: input.stopPrice,
-        reduceOnly: useClosePosition ? undefined : input.reduceOnly,
-        closePosition: useClosePosition ? true : undefined,
-        workingType: input.workingType ?? 'MARK_PRICE',
-        clientAlgoId: input.clientOrderId,
-      });
-
-      return {
-        orderId: String(response.algoId),
-        clientOrderId: response.clientAlgoId,
-        symbol: response.symbol,
-        status: response.algoStatus,
-        side: response.side,
-        type: response.orderType,
-        avgPrice: '0',
-        price: response.price ?? '0',
-        executedQty: response.quantity ?? '0',
-        isAlgoOrder: true,
-      };
-    }
+    const isConditional = input.type === 'STOP_MARKET' || input.type === 'TAKE_PROFIT_MARKET';
 
     const response = await this.signedRequest<BinanceStandardOrderResponse>('POST', '/fapi/v1/order', {
       symbol: input.symbol,
@@ -254,7 +225,7 @@ export class BinanceService {
       stopPrice: input.stopPrice,
       reduceOnly: useClosePosition ? undefined : input.reduceOnly,
       closePosition: useClosePosition ? true : undefined,
-      workingType: undefined,
+      workingType: isConditional ? 'MARK_PRICE' : undefined,
       newClientOrderId: input.clientOrderId,
       timeInForce: input.type === 'LIMIT' ? 'GTC' : undefined,
     });
