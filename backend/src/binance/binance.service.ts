@@ -52,6 +52,10 @@ export class BinanceService {
 
   private readonly mainHttp: AxiosInstance;
 
+  // Cached position mode — hedge (dual) vs one-way. Refreshed every hour.
+  private cachedPositionMode: 'one-way' | 'hedge' | null = null;
+  private positionModeCachedAt = 0;
+
   constructor(
     private readonly configService: ConfigService,
     private readonly logsService: LogsService,
@@ -212,6 +216,27 @@ export class BinanceService {
     return !!(this.apiKey && this.apiSecret);
   }
 
+  /**
+   * Returns 'hedge' if the Binance account is in dual-position (Hedge) mode,
+   * 'one-way' otherwise. Result is cached for 1 hour.
+   *
+   * In Hedge Mode every order MUST include positionSide (LONG / SHORT).
+   * In One-Way Mode positionSide should be BOTH (or omitted).
+   */
+  async getPositionMode(): Promise<'one-way' | 'hedge'> {
+    if (this.cachedPositionMode && Date.now() - this.positionModeCachedAt < 60 * 60_000) {
+      return this.cachedPositionMode;
+    }
+    try {
+      const data = await this.signedRequest<{ dualSidePosition: boolean }>('GET', '/fapi/v1/positionSide/dual');
+      this.cachedPositionMode = data.dualSidePosition ? 'hedge' : 'one-way';
+    } catch {
+      this.cachedPositionMode = 'one-way'; // safe default
+    }
+    this.positionModeCachedAt = Date.now();
+    return this.cachedPositionMode;
+  }
+
   async placeOrder(input: PlaceOrderInput): Promise<BinanceOrderResult> {
     const useClosePosition = input.closePosition === true;
     const isConditional = input.type === 'STOP_MARKET' || input.type === 'TAKE_PROFIT_MARKET';
@@ -220,6 +245,7 @@ export class BinanceService {
       symbol: input.symbol,
       side: input.side,
       type: input.type,
+      positionSide: input.positionSide,
       quantity: useClosePosition ? undefined : input.quantity,
       price: input.price,
       stopPrice: input.stopPrice,

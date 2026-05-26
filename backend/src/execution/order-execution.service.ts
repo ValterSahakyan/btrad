@@ -159,12 +159,22 @@ export class OrderExecutionService {
     const idPrefix = signalId.slice(0, 8);
     const rand = Math.random().toString(36).slice(2, 5);
 
+    // Detect position mode once — hedge mode requires positionSide on every order.
+    // In one-way mode positionSide is BOTH (or omitted). Without correct positionSide
+    // in hedge mode, Binance defaults BUY→open-LONG / SELL→open-SHORT, causing
+    // reduceOnly SL/TP orders to fail because they target the wrong side.
+    const posMode = await this.binanceService.getPositionMode();
+    const positionSide = posMode === 'hedge'
+      ? (signal.direction === 'LONG' ? 'LONG' : 'SHORT') as 'LONG' | 'SHORT'
+      : ('BOTH' as const);
+
     // ── Entry MARKET order ───────────────────────────────────────────────────
     const entryResult = await this.binanceService.placeOrder({
       symbol: sym.symbol,
       side,
       type: 'MARKET',
       quantity,
+      positionSide,
       clientOrderId: `${idPrefix}-e-${ts}-${rand}`,
     });
 
@@ -221,6 +231,7 @@ export class OrderExecutionService {
         quantity,
         stopPrice: Number(stopPrice.toFixed(sym.pricePrecision)),
         reduceOnly: true,
+        positionSide,
         clientOrderId,
         workingType,
       });
@@ -277,6 +288,7 @@ export class OrderExecutionService {
           type: 'MARKET',
           quantity,
           reduceOnly: true,
+          positionSide,
           clientOrderId: `${idPrefix}-emergency-${ts}-${rand}`,
         })
         .catch(async (closeErr) => {
@@ -355,6 +367,7 @@ export class OrderExecutionService {
           quantity: halfQty,
           stopPrice: Number(signal.takeProfit1.toFixed(sym.pricePrecision)),
           reduceOnly: true,
+          positionSide,
           clientOrderId: `${idPrefix}-tp1-${ts}-${rand}`,
         })
         .catch(async (err) => {
@@ -391,6 +404,7 @@ export class OrderExecutionService {
           quantity: halfQty,
           stopPrice: Number(signal.takeProfit2.toFixed(sym.pricePrecision)),
           reduceOnly: true,
+          positionSide,
           clientOrderId: `${idPrefix}-tp2-${ts}-${rand}`,
         })
         .catch(async (err) => {
@@ -428,6 +442,7 @@ export class OrderExecutionService {
           quantity,
           stopPrice: Number(signal.takeProfit2.toFixed(sym.pricePrecision)),
           reduceOnly: true,
+          positionSide,
           clientOrderId: `${idPrefix}-tp2-${ts}-${rand}`,
         })
         .catch(async (err) => {

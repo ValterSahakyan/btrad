@@ -208,12 +208,17 @@ export class PositionMonitorService implements OnModuleInit {
 
       const side = trade.direction === 'LONG' ? 'SELL' : 'BUY';
       const ts = Date.now();
+      const posMode = await this.binanceService.getPositionMode();
+      const positionSide = posMode === 'hedge'
+        ? (trade.direction === 'LONG' ? 'LONG' : 'SHORT') as 'LONG' | 'SHORT'
+        : ('BOTH' as const);
       const closeResult = await this.binanceService.placeOrder({
         symbol: trade.symbol,
         side,
         type: 'MARKET',
         quantity: trade.quantity,
         reduceOnly: true,
+        positionSide,
         clientOrderId: `${trade.id.slice(0, 8)}-timeout-${ts}`,
       });
 
@@ -397,6 +402,10 @@ export class PositionMonitorService implements OnModuleInit {
         // Place new SL at breakeven
         const side = trade.direction === 'LONG' ? 'SELL' : 'BUY';
         const ts = Date.now();
+        const posMode = await this.binanceService.getPositionMode();
+        const positionSide = posMode === 'hedge'
+          ? (trade.direction === 'LONG' ? 'LONG' : 'SHORT') as 'LONG' | 'SHORT'
+          : ('BOTH' as const);
         const newSlResult = await this.binanceService.placeOrder({
           symbol: trade.symbol,
           side,
@@ -404,6 +413,7 @@ export class PositionMonitorService implements OnModuleInit {
           quantity: trade.quantity,
           stopPrice: bePrice,
           reduceOnly: true,
+          positionSide,
           clientOrderId: `${trade.id.slice(0, 8)}-be-${ts}`,
         });
 
