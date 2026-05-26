@@ -2,7 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Prisma, Trade } from '@prisma/client';
 
 // Must match SYMBOL_COOLDOWN_MS in scanner.service.ts
-const SYMBOL_COOLDOWN_MS = 90 * 60_000;
+const SYMBOL_COOLDOWN_MS = 30 * 60_000;
 import { BinanceService } from '../binance/binance.service';
 import { OrderExecutionService } from '../execution/order-execution.service';
 import { LogsService } from '../logs/logs.service';

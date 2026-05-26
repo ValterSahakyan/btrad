@@ -315,12 +315,13 @@ export class ScannerService {
 
           // Skip crowded trades: high positive funding means longs pay shorts (too many longs already).
           // High negative funding means shorts pay longs (too many shorts already).
-          if (fundingRate > 0.0005 && candidate.direction === 'LONG') {
+          // Threshold 0.1% per 8h — only blocks truly extreme crowding, not normal bull/bear days.
+          if (fundingRate > 0.001 && candidate.direction === 'LONG') {
             const reason = `Funding rate too high for LONG (${(fundingRate * 100).toFixed(3)}%)`;
             riskReasonCounts.set(reason, (riskReasonCounts.get(reason) ?? 0) + 1);
             continue;
           }
-          if (fundingRate < -0.0005 && candidate.direction === 'SHORT') {
+          if (fundingRate < -0.001 && candidate.direction === 'SHORT') {
             const reason = `Funding rate too negative for SHORT (${(fundingRate * 100).toFixed(3)}%)`;
             riskReasonCounts.set(reason, (riskReasonCounts.get(reason) ?? 0) + 1);
             continue;
@@ -441,7 +442,7 @@ export class ScannerService {
         // Include 'approved' because autoExecute claims signals (active→approved) almost
         // instantly — a check for only 'pending'/'active' misses the window where a
         // concurrent scan or the position monitor would create a second trade.
-        // Also cover any signal created in the last 10 minutes to guard against
+        // Also cover any signal created in the last 3 minutes to guard against
         // concurrent scanner instances that outlast the Redis lock TTL.
         const existingSignal = await this.prisma.signal.findFirst({
           where: {
@@ -449,7 +450,7 @@ export class ScannerService {
             direction: candidate.direction,
             OR: [
               { status: { in: ['pending', 'active', 'approved'] } },
-              { createdAt: { gte: new Date(Date.now() - 10 * 60_000) } },
+              { createdAt: { gte: new Date(Date.now() - 3 * 60_000) } },
             ],
           },
         });
@@ -501,6 +502,15 @@ export class ScannerService {
           stopLoss = Number(stopLoss.toFixed(symbolRecord.pricePrecision));
         }
 
+        // Compute actual R/R from the final SL/TP prices (after any fixed ROE override).
+        // The candidate's riskReward reflects the strategy's theoretical setup, but the
+        // signal's riskReward should reflect what actually gets placed on exchange.
+        const actualRisk = Math.abs(candidate.entryPrice - stopLoss);
+        const actualReward = Math.abs(takeProfit2 - candidate.entryPrice);
+        const signalRiskReward = actualRisk > 0
+          ? Number((actualReward / actualRisk).toFixed(2))
+          : candidate.riskReward;
+
         const signal = await this.prisma.signal.create({
           data: {
             symbolId: symbolRecord.id,
@@ -513,7 +523,7 @@ export class ScannerService {
             leverage: risk.leverage,
             riskAmount: risk.riskAmount,
             positionSize: risk.positionSize,
-            riskReward: candidate.riskReward,
+            riskReward: signalRiskReward,
             hotScore,
             marketScore: regime.score,
             strategyScore: candidate.strategyScore,
@@ -761,8 +771,8 @@ function getBotVersionTag(): string {
 }
 
 // How long after a trade closes before the same symbol can be re-entered.
-// 1.5 hours: prevents chasing but allows same-day re-entry after conditions reset.
-const SYMBOL_COOLDOWN_MS = 90 * 60_000;
+// 30 min: prevents chasing while allowing frequent re-entry for high-frequency approach.
+const SYMBOL_COOLDOWN_MS = 30 * 60_000;
 
 function randomToken(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
