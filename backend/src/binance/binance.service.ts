@@ -257,52 +257,34 @@ export class BinanceService {
     };
 
     if (isConditional) {
-      // Some symbols only support conditional orders via the Algo Order API (-4120).
-      // Try the standard endpoint first; if rejected, fall back to the Algo API.
-      try {
-        const response = await this.signedRequest<BinanceStandardOrderResponse>('POST', '/fapi/v1/order', standardParams);
-        return {
-          orderId: String(response.orderId),
-          clientOrderId: response.clientOrderId,
-          symbol: response.symbol,
-          status: response.status,
-          side: response.side,
-          type: response.type,
-          avgPrice: response.avgPrice,
-          price: response.price,
-          executedQty: response.executedQty,
-        };
-      } catch (err) {
-        if (!(err instanceof BinanceApiError) || err.code !== -4120) throw err;
-
-        // -4120: symbol requires Algo Order API for conditional orders
-        const algoResponse = await this.signedRequest<BinanceAlgoOrderResponse>('POST', '/fapi/v1/algoOrder', {
-          algoType: 'CONDITIONAL',
-          symbol: input.symbol,
-          side: input.side,
-          type: input.type,
-          positionSide: input.positionSide,
-          quantity: useClosePosition ? undefined : input.quantity,
-          price: input.price,
-          triggerPrice: input.stopPrice,
-          reduceOnly: useClosePosition ? undefined : input.reduceOnly,
-          closePosition: useClosePosition ? true : undefined,
-          workingType: input.workingType ?? 'MARK_PRICE',
-          clientAlgoId: input.clientOrderId,
-        });
-        return {
-          orderId: String(algoResponse.algoId),
-          clientOrderId: algoResponse.clientAlgoId,
-          symbol: algoResponse.symbol,
-          status: algoResponse.algoStatus,
-          side: algoResponse.side,
-          type: algoResponse.orderType,
-          avgPrice: '0',
-          price: algoResponse.price ?? '0',
-          executedQty: algoResponse.quantity ?? '0',
-          isAlgoOrder: true,
-        };
-      }
+      // The standard /fapi/v1/order endpoint always returns -4120 for STOP_MARKET /
+      // TAKE_PROFIT_MARKET. Must use the Algo Order API for all conditional orders.
+      const algoResponse = await this.signedRequest<BinanceAlgoOrderResponse>('POST', '/fapi/v1/algoOrder', {
+        algoType: 'CONDITIONAL',
+        symbol: input.symbol,
+        side: input.side,
+        type: input.type,
+        positionSide: input.positionSide,
+        quantity: useClosePosition ? undefined : input.quantity,
+        price: input.price,
+        triggerPrice: input.stopPrice,
+        reduceOnly: useClosePosition ? undefined : input.reduceOnly,
+        closePosition: useClosePosition ? true : undefined,
+        workingType: input.workingType ?? 'MARK_PRICE',
+        clientAlgoId: input.clientOrderId,
+      });
+      return {
+        orderId: String(algoResponse.algoId),
+        clientOrderId: algoResponse.clientAlgoId,
+        symbol: algoResponse.symbol,
+        status: algoResponse.algoStatus,
+        side: algoResponse.side,
+        type: algoResponse.orderType,
+        avgPrice: '0',
+        price: algoResponse.price ?? '0',
+        executedQty: algoResponse.quantity ?? '0',
+        isAlgoOrder: true,
+      };
     }
 
     const response = await this.signedRequest<BinanceStandardOrderResponse>('POST', '/fapi/v1/order', standardParams);
