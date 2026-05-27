@@ -17,6 +17,19 @@ const defaultAnalytics = {
   bySession: {},
 };
 
+type DeepDiveEntry = {
+  total: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+  totalPnl: number;
+  avgPnl: number;
+  avgHoldHours: number;
+  avgConfidenceScore: number;
+  byStatus: Record<string, number>;
+  byDirection: Record<string, { count: number; wins: number; winRate: number; pnl: number }>;
+};
+
 function pnl(v: number) {
   return <span className={`font-mono text-[12px] font-medium ${v > 0 ? 'text-positive' : v < 0 ? 'text-danger' : 'text-dim'}`}>{currency(v)}</span>;
 }
@@ -31,6 +44,7 @@ export default function PerformancePage() {
   const [byStrategy, setByStrategy] = useState<Record<string, { count: number; pnl: number; winRate?: number }>>({});
   const [bySymbol, setBySymbol] = useState<Record<string, { count: number; pnl: number; winRate?: number }>>({});
   const [analytics, setAnalytics] = useState<any>(defaultAnalytics);
+  const [deepDive, setDeepDive] = useState<Record<string, DeepDiveEntry>>({});
   const [trades, setTrades] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [backendError, setBackendError] = useState<string | null>(null);
@@ -43,6 +57,7 @@ export default function PerformancePage() {
         fetch(clientApiPath('/performance/strategies'), { credentials: 'include', cache: 'no-store' }),
         fetch(clientApiPath('/performance/symbols'), { credentials: 'include', cache: 'no-store' }),
         fetch(clientApiPath('/performance/analytics'), { credentials: 'include', cache: 'no-store' }),
+        fetch(clientApiPath('/performance/strategy-deep-dive'), { credentials: 'include', cache: 'no-store' }),
         fetch(clientApiPath('/trades'), { credentials: 'include', cache: 'no-store' }),
       ]);
 
@@ -52,7 +67,7 @@ export default function PerformancePage() {
         return;
       }
 
-      const [nextPerf, nextByStrategy, nextBySymbol, nextAnalytics, nextTrades] = await Promise.all(
+      const [nextPerf, nextByStrategy, nextBySymbol, nextAnalytics, nextDeepDive, nextTrades] = await Promise.all(
         responses.map((response) => response.json()),
       );
 
@@ -60,6 +75,7 @@ export default function PerformancePage() {
       setByStrategy(nextByStrategy);
       setBySymbol(nextBySymbol);
       setAnalytics(nextAnalytics);
+      setDeepDive(nextDeepDive);
       setTrades(nextTrades);
       setBackendError(null);
       setLastUpdated(new Date());
@@ -146,6 +162,40 @@ export default function PerformancePage() {
           ))}
         />
       </div>
+
+      <PerformanceTable
+        title="Strategy Deep Dive"
+        emptyLabel="No closed trade data yet"
+        headers={['Strategy', 'Trades', 'W/L/F', 'Win %', 'Avg PnL', 'Total PnL', 'Avg Hold', 'Conf', 'TP', 'SL', 'LONG W%', 'SHORT W%']}
+        rows={Object.entries(deepDive).map(([strategy, d]) => {
+          const tpCount = d.byStatus['take_profit'] ?? 0;
+          const slCount = d.byStatus['stopped'] ?? 0;
+          const failedCount = d.byStatus['failed'] ?? 0;
+          const longDir = d.byDirection['LONG'];
+          const shortDir = d.byDirection['SHORT'];
+          return (
+            <tr key={strategy}>
+              <td className="font-medium text-[12px] whitespace-nowrap">{strategy}</td>
+              <td className="font-mono text-[12px] text-dim">{d.total}</td>
+              <td className="font-mono text-[11px]">
+                <span className="text-positive">{d.wins}</span>
+                <span className="text-dim">/</span>
+                <span className="text-danger">{d.losses}</span>
+                {failedCount > 0 && <><span className="text-dim">/</span><span className="text-warning">{failedCount}</span></>}
+              </td>
+              <td>{winRateCell(d.winRate)}</td>
+              <td>{pnl(d.avgPnl)}</td>
+              <td>{pnl(d.totalPnl)}</td>
+              <td className="font-mono text-[11px] text-dim whitespace-nowrap">{d.avgHoldHours.toFixed(1)}h</td>
+              <td className="font-mono text-[11px] text-dim">{d.avgConfidenceScore.toFixed(0)}</td>
+              <td className="font-mono text-[11px] text-positive">{tpCount > 0 ? tpCount : <span className="text-dim">—</span>}</td>
+              <td className="font-mono text-[11px] text-danger">{slCount > 0 ? slCount : <span className="text-dim">—</span>}</td>
+              <td>{longDir ? winRateCell(longDir.winRate) : <span className="text-dim font-mono text-[11px]">—</span>}</td>
+              <td>{shortDir ? winRateCell(shortDir.winRate) : <span className="text-dim font-mono text-[11px]">—</span>}</td>
+            </tr>
+          );
+        })}
+      />
 
       <div className="grid gap-3 xl:grid-cols-2">
         <PerformanceTable

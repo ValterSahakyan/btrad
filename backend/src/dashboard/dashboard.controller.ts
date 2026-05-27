@@ -493,6 +493,105 @@ export class DashboardController {
     return buildAnalyticsReport(trades);
   }
 
+  @Get('/performance/strategy-deep-dive')
+  async performanceStrategyDeepDive() {
+    const trades = await this.prisma.trade.findMany({
+      where: { status: { not: 'live_open' } },
+      select: {
+        status: true,
+        direction: true,
+        pnl: true,
+        margin: true,
+        openedAt: true,
+        closedAt: true,
+        signal: {
+          select: { strategy: true, confidenceScore: true },
+        },
+      },
+    });
+
+    type DeepDiveBucket = {
+      total: number;
+      wins: number;
+      losses: number;
+      totalPnl: number;
+      holdHoursSum: number;
+      holdHoursCount: number;
+      confidenceSum: number;
+      confidenceCount: number;
+      byStatus: Record<string, number>;
+      byDirection: Record<string, { count: number; wins: number; pnl: number }>;
+    };
+
+    const buckets = new Map<string, DeepDiveBucket>();
+
+    for (const trade of trades) {
+      const strategy = trade.signal?.strategy ?? 'unknown';
+      if (!buckets.has(strategy)) {
+        buckets.set(strategy, {
+          total: 0, wins: 0, losses: 0, totalPnl: 0,
+          holdHoursSum: 0, holdHoursCount: 0,
+          confidenceSum: 0, confidenceCount: 0,
+          byStatus: {},
+          byDirection: {},
+        });
+      }
+      const b = buckets.get(strategy)!;
+      const pnl = trade.pnl ?? 0;
+      b.total += 1;
+      b.totalPnl += pnl;
+      if (pnl > 0) b.wins += 1; else b.losses += 1;
+
+      b.byStatus[trade.status] = (b.byStatus[trade.status] ?? 0) + 1;
+
+      const dir = trade.direction;
+      if (!b.byDirection[dir]) b.byDirection[dir] = { count: 0, wins: 0, pnl: 0 };
+      b.byDirection[dir].count += 1;
+      b.byDirection[dir].pnl += pnl;
+      if (pnl > 0) b.byDirection[dir].wins += 1;
+
+      if (trade.openedAt && trade.closedAt) {
+        const hours = (trade.closedAt.getTime() - trade.openedAt.getTime()) / 3_600_000;
+        if (hours >= 0) { b.holdHoursSum += hours; b.holdHoursCount += 1; }
+      }
+
+      if (trade.signal?.confidenceScore != null) {
+        b.confidenceSum += trade.signal.confidenceScore;
+        b.confidenceCount += 1;
+      }
+    }
+
+    return Object.fromEntries(
+      [...buckets.entries()]
+        .sort((a, b) => b[1].total - a[1].total)
+        .map(([strategy, b]) => [
+          strategy,
+          {
+            total: b.total,
+            wins: b.wins,
+            losses: b.losses,
+            winRate: b.total === 0 ? 0 : round2((b.wins / b.total) * 100),
+            totalPnl: round4(b.totalPnl),
+            avgPnl: b.total === 0 ? 0 : round4(b.totalPnl / b.total),
+            avgHoldHours: b.holdHoursCount === 0 ? 0 : round2(b.holdHoursSum / b.holdHoursCount),
+            avgConfidenceScore: b.confidenceCount === 0 ? 0 : round2(b.confidenceSum / b.confidenceCount),
+            byStatus: b.byStatus,
+            byDirection: Object.fromEntries(
+              Object.entries(b.byDirection).map(([dir, d]) => [
+                dir,
+                {
+                  count: d.count,
+                  wins: d.wins,
+                  winRate: d.count === 0 ? 0 : round2((d.wins / d.count) * 100),
+                  pnl: round4(d.pnl),
+                },
+              ]),
+            ),
+          },
+        ]),
+    );
+  }
+
   @Get('/logs')
   logs() {
     return this.logsService.listLogs();
