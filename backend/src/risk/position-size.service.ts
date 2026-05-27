@@ -10,8 +10,15 @@ export class PositionSizeService {
     stepSize = 0.001,
     maxNotionalUsd = 0,
     minNotionalUsd = 0,
+    confidenceScore = 75,
   ): { riskAmount: number; stopDistance: number; quantity: number } {
-    const riskAmount = (balance * riskPerTradePercent) / 100;
+    // Van Tharp: bet more on high-conviction signals, protect capital on borderline ones.
+    const confidenceMultiplier =
+      confidenceScore >= 85 ? 1.25 :
+      confidenceScore >= 78 ? 1.0  :
+      confidenceScore >= 72 ? 0.75 :
+                              0.5;
+    const riskAmount = (balance * riskPerTradePercent * confidenceMultiplier) / 100;
     const stopDistance = Math.abs(entryPrice - stopLoss);
     if (stopDistance === 0 || entryPrice === 0) return { riskAmount, stopDistance: 0, quantity: 0 };
 

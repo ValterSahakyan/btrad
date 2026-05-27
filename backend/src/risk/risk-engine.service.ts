@@ -45,8 +45,10 @@ export class RiskEngineService {
     const minRiskReward = settings?.minRiskReward ?? 1.5;
     const defaultLeverage = settings?.defaultLeverage ?? 3;
     const minPositionUsd = settings?.minPositionUsd ?? 5;
-
     const maxPositionUsd = settings?.maxPositionUsd ?? 20;
+    const maxOpenTrades = (settings as any)?.maxOpenTrades ?? 5;
+    const maxDailyLossPercent = (settings as any)?.maxDailyLossPercent ?? 3;
+
     const positionSize = this.positionSizeService.calculate(
       usdtBalance,
       riskPerTradePercent,
@@ -55,6 +57,7 @@ export class RiskEngineService {
       input.stepSize,
       maxPositionUsd,
       minPositionUsd,
+      input.confidenceScore,
     );
 
     // Use the higher of the settings floor and the exchange's own minimum notional
@@ -62,7 +65,7 @@ export class RiskEngineService {
 
     const messages: string[] = [];
     if (input.expiresAt.getTime() < Date.now()) messages.push('Signal expired');
-    const maxSpreadPercent = settings?.maxSpreadPercent ?? 0.4;
+    const maxSpreadPercent = (settings as any)?.maxSpreadPercent ?? 0.4;
     if (input.riskReward < minRiskReward) messages.push('Risk reward below minimum');
     if (input.spread > maxSpreadPercent) messages.push('Spread too high');
     if (input.marketRegime === 'no_trade') messages.push('Market regime blocked');
@@ -73,6 +76,27 @@ export class RiskEngineService {
         ? ` (raise maxPositionUsd above $${effectiveMinNotional.toFixed(0)} in Settings)`
         : '';
       messages.push(`Position notional $${notionalUsd.toFixed(2)} below minimum $${effectiveMinNotional.toFixed(2)}${hint}`);
+    }
+
+    // Max open trades hard cap (Schwager: every great trader has defined position limits)
+    const openTradeCount = await this.prisma.trade.count({ where: { status: 'live_open' } });
+    if (openTradeCount >= maxOpenTrades) {
+      messages.push(`Max open trades reached (${openTradeCount}/${maxOpenTrades})`);
+    }
+
+    // Daily loss circuit breaker (Taleb: protect against ruin; never let a bad day spiral)
+    if (maxDailyLossPercent > 0 && usdtBalance > 0) {
+      const todayStart = new Date();
+      todayStart.setUTCHours(0, 0, 0, 0);
+      const todayTrades = await this.prisma.trade.findMany({
+        where: { closedAt: { gte: todayStart }, pnl: { not: null } },
+        select: { pnl: true },
+      });
+      const dailyPnl = todayTrades.reduce((sum, t) => sum + (t.pnl ?? 0), 0);
+      const dailyLossPct = (Math.abs(Math.min(0, dailyPnl)) / usdtBalance) * 100;
+      if (dailyLossPct >= maxDailyLossPercent) {
+        messages.push(`Daily loss limit hit: -${dailyLossPct.toFixed(2)}% of ${maxDailyLossPercent}% allowed`);
+      }
     }
 
     const riskScore =

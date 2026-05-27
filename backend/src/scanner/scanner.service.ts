@@ -398,6 +398,7 @@ export class ScannerService {
               candidate,
               confidenceScore,
               riskScore: risk.riskScore,
+              regime: regime.regime,
             }),
           });
         }
@@ -743,8 +744,22 @@ export class ScannerService {
   }
 }
 
-function effectiveMinConfidence(base: number, _strategy: string): number {
-  return base;
+// Per-strategy confidence thresholds based on structural reliability.
+// Counter-trend strategies (exhaustion_reversal) require more conviction than
+// trend-following ones (breakout_volume, trend_reclaim) because the base rate
+// of success is lower when trading against momentum.
+// Reference: Murphy "Technical Analysis" — trend-following has highest base rate;
+// Steenbarger "Psychology of Trading" — high-confidence counter-trend requires
+// extremely clear exhaustion signals.
+function effectiveMinConfidence(base: number, strategy: string): number {
+  const delta: Record<string, number> = {
+    'exhaustion_reversal':   8,  // counter-trend: needs strong exhaustion evidence
+    'range_bounce':          3,  // S/R rejection: needs confirmed multi-touch levels
+    'pullback_continuation': 0,  // trend pullback: neutral baseline
+    'breakout_volume':      -2,  // trend-following: most reliable structure
+    'trend_reclaim':        -2,  // OB/FVG confluence already raises bar structurally
+  };
+  return base + (delta[strategy] ?? 0);
 }
 
 function computeSelectionScore(input: {
@@ -755,13 +770,20 @@ function computeSelectionScore(input: {
   };
   confidenceScore: number;
   riskScore: number;
+  regime: string;
 }): number {
+  // Soros (Alchemy of Finance): reflexivity — market momentum amplifies moves in
+  // the direction of the trend. Prefer trades aligned with the current regime.
+  const regimeBonus =
+    (input.regime === 'bullish' && input.candidate.direction === 'LONG') ? 300 :
+    (input.regime === 'bearish' && input.candidate.direction === 'SHORT') ? 300 : 0;
+
   return (
     input.confidenceScore * 100 +
     input.riskScore * 10 +
     input.candidate.strategyScore +
     input.candidate.riskReward * 5 +
-    (input.candidate.direction === 'SHORT' ? 0.5 : 0)
+    regimeBonus
   );
 }
 
