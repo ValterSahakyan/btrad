@@ -74,7 +74,6 @@ export class RangeBounceStrategy implements TradingStrategy {
       current.close > current.open &&
       prev.close < prev.open &&
       currentRsi <= cfg.rsiLongMax &&
-      context.marketRegime.regime !== 'no_trade' &&
       coinTrend1h !== 'bearish'
     ) {
       // REQUIRE a bullish rejection candle at support (Nison — the candle confirms the level)
