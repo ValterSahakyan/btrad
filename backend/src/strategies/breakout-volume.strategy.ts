@@ -64,7 +64,6 @@ export class BreakoutVolumeStrategy implements TradingStrategy {
       currentPrice > ema200 &&
       breakout.longBreakout &&
       structure.breakOfStructure &&
-      context.marketRegime.regime !== 'bearish' &&
       context.marketRegime.regime !== 'no_trade' &&
       htf4Trend !== 'bearish'
     ) {

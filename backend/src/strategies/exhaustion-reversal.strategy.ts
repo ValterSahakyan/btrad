@@ -51,7 +51,7 @@ export class ExhaustionReversalStrategy implements TradingStrategy {
       (currentRsi > cfg.rsiOverbought + 4 && vwapDeviation > cfg.vwapDeviationPct + 0.5);
     const countertrendLongAllowed =
       !hostileBearTrend ||
-      (currentRsi < cfg.rsiOversold - 4 && vwapDeviation < -(cfg.vwapDeviationPct + 0.5));
+      (currentRsi < cfg.rsiOversold && vwapDeviation < -cfg.vwapDeviationPct);
 
     // Candlestick patterns — REQUIRED for exhaustion_reversal.
     // Fading a move without a reversal candle is the #1 cause of losses in mean-reversion.

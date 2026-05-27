@@ -77,7 +77,6 @@ export class TrendReclaimStrategy implements TradingStrategy {
     if (
       htfTrend === 'bullish' &&
       strongBullTrend &&
-      context.marketRegime.regime !== 'bearish' &&
       context.marketRegime.regime !== 'no_trade' &&
       ema20 > ema20Prev &&
       trendStrengthAtr >= 0.22 &&
