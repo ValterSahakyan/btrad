@@ -189,16 +189,16 @@ export class PositionMonitorService implements OnModuleInit {
     try {
       const openOrders = trade.orders.filter((order) => order.status === 'open' && order.binanceOrderId);
       for (const order of openOrders) {
-        const cancelRequest = this.binanceService.cancelOrder(trade.symbol, order.binanceOrderId!);
-
-        await cancelRequest.catch(async (err) => {
-          await this.logsService.warn('monitor', `Failed to cancel timeout order ${order.binanceOrderId}`, {
-            tradeId: trade.id,
-            symbol: trade.symbol,
-            orderType: order.type,
-            error: err instanceof Error ? err.message : String(err),
+        await this.binanceService.cancelOrder(trade.symbol, order.binanceOrderId!)
+          .catch(() => this.binanceService.cancelAlgoOrder(order.binanceOrderId!))
+          .catch(async (err) => {
+            await this.logsService.warn('monitor', `Failed to cancel timeout order ${order.binanceOrderId}`, {
+              tradeId: trade.id,
+              symbol: trade.symbol,
+              orderType: order.type,
+              error: err instanceof Error ? err.message : String(err),
+            });
           });
-        });
       }
 
       await this.prisma.order.updateMany({
@@ -385,15 +385,17 @@ export class PositionMonitorService implements OnModuleInit {
           ).toFixed(pricePrecision),
         );
 
-        // Cancel the existing SL
-        await this.binanceService.cancelOrder(trade.symbol, openSl.binanceOrderId!).catch(async (err) => {
-          await this.logsService.warn('monitor', `Breakeven: failed to cancel old SL for ${trade.symbol}`, {
-            tradeId: trade.id,
-            binanceOrderId: openSl.binanceOrderId,
-            error: err instanceof Error ? err.message : String(err),
+        // Cancel the existing SL (try standard cancel, fall back to algo cancel)
+        await this.binanceService.cancelOrder(trade.symbol, openSl.binanceOrderId!)
+          .catch(() => this.binanceService.cancelAlgoOrder(openSl.binanceOrderId!))
+          .catch(async (err) => {
+            await this.logsService.warn('monitor', `Breakeven: failed to cancel old SL for ${trade.symbol}`, {
+              tradeId: trade.id,
+              binanceOrderId: openSl.binanceOrderId,
+              error: err instanceof Error ? err.message : String(err),
+            });
+            throw err;
           });
-          throw err;
-        });
 
         await this.prisma.order.update({
           where: { id: openSl.id },
