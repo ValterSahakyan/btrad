@@ -58,12 +58,20 @@ function pnlPct(v: number | null | undefined) {
   );
 }
 
-function statusBadge(s: string) {
+function statusBadge(s: string, failReason?: string | null) {
   if (s === 'live_open') return <Badge tone="positive">live</Badge>;
   if (s === 'take_profit') return <Badge tone="positive">TP</Badge>;
   if (s === 'stopped') return <Badge tone="danger">SL</Badge>;
   if (s === 'time_stop') return <Badge tone="warning">TIME</Badge>;
   if (s === 'manually_closed') return <Badge tone="neutral">closed</Badge>;
+  if (s === 'failed') {
+    return (
+      <span title={failReason ?? undefined} className="cursor-help">
+        <Badge tone="neutral">failed</Badge>
+        {failReason && <span className="ml-1 text-[10px] text-danger font-mono">ⓘ</span>}
+      </span>
+    );
+  }
   return <Badge tone="neutral">{s}</Badge>;
 }
 
@@ -278,7 +286,7 @@ export default function TradesPage() {
                         <td className="font-mono text-[12px] text-dim">{currency(t.margin)}</td>
                         <td>{pnlCell(t.pnl, isLive)}</td>
                         <td>{pnlPct(t.pnlPercent)}</td>
-                        <td>{statusBadge(t.status)}</td>
+                        <td>{statusBadge(t.status, t.failReason)}</td>
                         <td>
                           {isLive && !t.orphanedFromDb && (
                             <button

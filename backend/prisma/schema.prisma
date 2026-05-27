@@ -218,6 +218,7 @@ model Trade {
   pnl        Float?
   pnlPercent Float?
   status     TradeStatus
+  failReason String?
   openedAt   DateTime?
   closedAt   DateTime?
   createdAt  DateTime    @default(now())

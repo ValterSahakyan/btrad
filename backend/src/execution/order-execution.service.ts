@@ -239,10 +239,13 @@ export class OrderExecutionService {
         workingType,
       });
 
+    let slFailReason: string | null = null;
+
     let slResult = await placeSl(signal.stopLoss, `${idPrefix}-sl-${ts}-${rand}`).catch(async (err) => {
+      slFailReason = err instanceof Error ? err.message : String(err);
       await this.logsService.warn('execution', 'SL attempt 1 failed — retrying with adjusted price', {
         symbol: sym.symbol,
-        error: err instanceof Error ? err.message : String(err),
+        error: slFailReason,
         originalSl: signal.stopLoss,
         signalId,
         tradeId: trade.id,
@@ -258,9 +261,10 @@ export class OrderExecutionService {
 
       // Attempt 2: MARK_PRICE with wider buffer
       const attempt2 = await placeSl(adjustedSl, `${idPrefix}-sl2-${ts}-${rand}`).catch(async (err2) => {
+        slFailReason = err2 instanceof Error ? err2.message : String(err2);
         await this.logsService.warn('execution', 'SL attempt 2 (MARK_PRICE) failed — retrying with CONTRACT_PRICE', {
           symbol: sym.symbol,
-          error: err2 instanceof Error ? err2.message : String(err2),
+          error: slFailReason,
           adjustedSl,
           signalId,
           tradeId: trade.id,
@@ -271,9 +275,10 @@ export class OrderExecutionService {
 
       // Attempt 3: CONTRACT_PRICE (fallback for accounts where MARK_PRICE triggers are restricted)
       return placeSl(adjustedSl, `${idPrefix}-sl3-${ts}-${rand}`, 'CONTRACT_PRICE').catch(async (err3) => {
+        slFailReason = err3 instanceof Error ? err3.message : String(err3);
         await this.logsService.error('execution', 'SL attempt 3 (CONTRACT_PRICE) also failed — emergency close', {
           symbol: sym.symbol,
-          error: err3 instanceof Error ? err3.message : String(err3),
+          error: slFailReason,
           adjustedSl,
           signalId,
           tradeId: trade.id,
@@ -318,6 +323,7 @@ export class OrderExecutionService {
         where: { id: trade.id },
         data: {
           status: 'failed',
+          failReason: slFailReason ?? 'SL order placement failed',
           closedAt: new Date(),
           exitPrice: Number(closePrice.toFixed(8)),
           pnl: Number(emergencyPnl.toFixed(4)),
