@@ -75,7 +75,10 @@
       "Bash(curl -s \"https://developers.binance.com/docs/derivatives/usds-margined-futures/trade/rest-api/New-Algo-Order\")",
       "Bash(PGPASSWORD=postgres psql -h localhost -p 5435 -U postgres -d perpscout -c \"SELECT level, source, message, \\\\\"metadataJson\\\\\", \\\\\"createdAt\\\\\" FROM \\\\\"BotLog\\\\\" WHERE \\\\\"createdAt\\\\\" > NOW\\(\\) - INTERVAL '2 hours' AND level IN \\('error','warn'\\) ORDER BY \\\\\"createdAt\\\\\" DESC LIMIT 30;\")",
       "Bash(node -e \"const p = require\\('./backend/package.json'\\); console.log\\(JSON.stringify\\(p.scripts, null, 2\\)\\);\")",
-      "Bash(node -e \"const p = require\\('c:/work/btrad/package.json'\\); console.log\\(JSON.stringify\\(p.scripts, null, 2\\)\\);\")"
+      "Bash(node -e \"const p = require\\('c:/work/btrad/package.json'\\); console.log\\(JSON.stringify\\(p.scripts, null, 2\\)\\);\")",
+      "Bash(awk '{print $NF}')",
+      "Bash(grep -v '^\\\\\\\\.')",
+      "Bash(npm --workspace frontend run build)"
     ]
   }
 }
