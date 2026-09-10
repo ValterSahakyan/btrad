@@ -1,14 +1,16 @@
 import type { Metadata } from 'next';
-import { headers } from 'next/headers';
 import './globals.css';
-import { Sidebar } from '@/components/layout/sidebar';
-import { Topbar } from '@/components/layout/header';
-import { TradeVoiceNotifier } from '@/components/layout/trade-voice-notifier';
 
+// Root layout is intentionally minimal and static: no headers()/cookies() and
+// no app chrome. Anything request-dependent forces every route — including the
+// built-in /404, /500 and /_error pages — to fail static generation, which this
+// platform's build surfaces as "<Html> should not be imported outside of
+// pages/_document". The dashboard chrome lives in app/(app)/layout.tsx; the
+// login page renders bare through this root layout.
+//
 // Fonts come from a system stack defined in globals.css (:root --font-inter /
 // --font-mono). next/font/google was removed because it fetches font files from
-// fonts.googleapis.com at BUILD time — that network call fails in restricted
-// build sandboxes and surfaces as "Export encountered an error on /_error: /404".
+// fonts.googleapis.com at build time, which fails in restricted build sandboxes.
 
 export const metadata: Metadata = {
   title: 'Bee Trading ',
@@ -16,36 +18,10 @@ export const metadata: Metadata = {
   icons: { icon: '/icon.svg' },
 };
 
-// This layout already reads request headers (below), so nothing under it can be
-// statically prerendered anyway. Make it explicit so the build never attempts a
-// static export of /404 or /_error through this tree — that export is what fails
-// on hosted builders ("Export encountered an error on /_error: /404").
-export const dynamic = 'force-dynamic';
-
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const pathname = (await headers()).get('x-pathname') ?? '';
-  const isPublic = pathname === '/login';
-
-  if (isPublic) {
-    return (
-      <html lang="en">
-        <body suppressHydrationWarning>{children}</body>
-      </html>
-    );
-  }
-
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body suppressHydrationWarning>
-        <div className="app-shell">
-          <Sidebar />
-          <div className="app-main-wrap">
-            <Topbar />
-            <TradeVoiceNotifier />
-            <main className="app-content">{children}</main>
-          </div>
-        </div>
-      </body>
+      <body suppressHydrationWarning>{children}</body>
     </html>
   );
 }
