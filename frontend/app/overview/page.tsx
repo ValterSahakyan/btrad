@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { ActionButton } from '@/components/actions/action-button';
 import { DataTable } from '@/components/dashboard/data-table';
 import { MetricCard } from '@/components/dashboard/metric-card';
@@ -84,7 +83,6 @@ export default function OverviewPage() {
   const [loading, setLoading] = useState(true);
   const [backendError, setBackendError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const router = useRouter();
 
   const fetchAll = useCallback(async () => {
     try {
@@ -101,9 +99,10 @@ export default function OverviewPage() {
       const firstFailure = responses.find((response) => !response.ok);
       if (firstFailure) {
         // Session expired/invalid — retrying forever just spams the same 401.
-        // Send the user to log in again instead.
+        // Full reload to /login (not router.push) so middleware re-runs and no
+        // stale client state survives.
         if (firstFailure.status === 401) {
-          router.push('/login');
+          window.location.href = '/login';
           return;
         }
         setBackendError(`Backend request failed (${firstFailure.status})`);
@@ -128,7 +127,7 @@ export default function OverviewPage() {
     } finally {
       setLoading(false);
     }
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     fetchAll();

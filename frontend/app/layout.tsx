@@ -26,6 +26,12 @@ export const metadata: Metadata = {
   icons: { icon: '/icon.svg' },
 };
 
+// This layout already reads request headers (below), so nothing under it can be
+// statically prerendered anyway. Make it explicit so the build never attempts a
+// static export of /404 or /_error through this tree — that export is what fails
+// on hosted builders ("Export encountered an error on /_error: /404").
+export const dynamic = 'force-dynamic';
+
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const pathname = (await headers()).get('x-pathname') ?? '';
   const isPublic = pathname === '/login';

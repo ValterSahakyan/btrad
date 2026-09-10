@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { ActionButton } from '@/components/actions/action-button';
 import { DailyExportControls } from '@/components/actions/daily-export-controls';
 import { Badge } from '@/components/ui/badge';
@@ -53,7 +52,6 @@ export default function SignalsPage() {
   const [loading, setLoading] = useState(true);
   const [backendError, setBackendError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const router = useRouter();
 
   const fetchAll = useCallback(async () => {
     try {
@@ -64,7 +62,7 @@ export default function SignalsPage() {
       if (!sigRes.ok || !stRes.ok) {
         const failedStatus = !sigRes.ok ? sigRes.status : stRes.status;
         if (failedStatus === 401) {
-          router.push('/login');
+          window.location.href = '/login';
           return;
         }
         setBackendError(`Backend request failed (${failedStatus})`);
@@ -79,7 +77,7 @@ export default function SignalsPage() {
     } finally {
       setLoading(false);
     }
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     fetchAll();

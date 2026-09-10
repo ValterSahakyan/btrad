@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { MetricCard } from '@/components/dashboard/metric-card';
 import { clientApiPath } from '@/lib/client-api';
 import { currency, number } from '@/lib/utils';
@@ -50,7 +49,6 @@ export default function PerformancePage() {
   const [loading, setLoading] = useState(true);
   const [backendError, setBackendError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const router = useRouter();
 
   const fetchAll = useCallback(async () => {
     try {
@@ -66,7 +64,7 @@ export default function PerformancePage() {
       const firstFailure = responses.find((response) => !response.ok);
       if (firstFailure) {
         if (firstFailure.status === 401) {
-          router.push('/login');
+          window.location.href = '/login';
           return;
         }
         setBackendError(`Backend request failed (${firstFailure.status})`);
@@ -90,7 +88,7 @@ export default function PerformancePage() {
     } finally {
       setLoading(false);
     }
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     fetchAll();

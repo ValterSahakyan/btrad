@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { DailyExportControls } from '@/components/actions/daily-export-controls';
 import { Badge } from '@/components/ui/badge';
 import { Pagination } from '@/components/ui/pagination';
@@ -86,14 +85,13 @@ export default function TradesPage() {
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<SortState>({ key: 'createdAt', direction: 'desc' });
   const { confirm, modal } = useConfirm();
-  const router = useRouter();
 
   const fetchTrades = useCallback(async () => {
     try {
       const res = await fetch(clientApiPath('/trades'), { credentials: 'include', cache: 'no-store' });
       if (!res.ok) {
         if (res.status === 401) {
-          router.push('/login');
+          window.location.href = '/login';
           return;
         }
         setBackendError(`Backend request failed (${res.status})`);
@@ -107,7 +105,7 @@ export default function TradesPage() {
     } finally {
       setLoading(false);
     }
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     fetchTrades();

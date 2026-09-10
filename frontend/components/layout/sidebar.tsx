@@ -3,7 +3,7 @@
 import type { Route } from 'next';
 import type { ComponentType } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import {
   Activity,
@@ -36,7 +36,6 @@ const productMeta = {
 
 export function Sidebar() {
   const pathname = usePathname();
-  const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
 
   async function handleLogout() {
@@ -47,8 +46,10 @@ export function Sidebar() {
       // Even if the request fails, send the user to /login — worst case
       // they just need to sign in again, which is the goal either way.
     } finally {
-      router.push('/login');
-      router.refresh();
+      // Full reload (not router.push) — clears stale client state and re-runs
+      // middleware. Also keeps useRouter out of the layout/Sidebar tree, which
+      // renders inside the statically-exported 404/_error pages.
+      window.location.href = '/login';
     }
   }
 
