@@ -90,8 +90,11 @@ export class ExhaustionReversalStrategy implements TradingStrategy {
       const risk = stopLoss - currentPrice;
       if (risk <= 0 || risk / currentPrice > cfg.maxSlPercent / 100) return null;
 
-      const takeProfit1 = currentPrice - risk * 1.5;
-      const takeProfit2 = Math.min(currentPrice - risk * 2.5, currentVwap);
+      // TP1 multiplier is deliberately > minRiskReward (currently 1.7) — this is
+      // the value the riskReward gate below checks. If it ever drops to/below
+      // minRiskReward, this strategy silently produces zero signals forever.
+      const takeProfit1 = currentPrice - risk * 1.8;
+      const takeProfit2 = Math.min(currentPrice - risk * 2.6, currentVwap);
       const riskReward = (currentPrice - takeProfit1) / risk;
       if (riskReward < context.minRiskReward) return null;
 
@@ -150,8 +153,11 @@ export class ExhaustionReversalStrategy implements TradingStrategy {
       const risk = currentPrice - stopLoss;
       if (risk <= 0 || risk / currentPrice > cfg.maxSlPercent / 100) return null;
 
-      const takeProfit1 = currentPrice + risk * 1.5;
-      const takeProfit2 = Math.max(currentPrice + risk * 2.5, currentVwap);
+      // TP1 multiplier is deliberately > minRiskReward (currently 1.7) — this is
+      // the value the riskReward gate below checks. If it ever drops to/below
+      // minRiskReward, this strategy silently produces zero signals forever.
+      const takeProfit1 = currentPrice + risk * 1.8;
+      const takeProfit2 = Math.max(currentPrice + risk * 2.6, currentVwap);
       const riskReward = (takeProfit1 - currentPrice) / risk;
       if (riskReward < context.minRiskReward) return null;
 

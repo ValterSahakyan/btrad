@@ -6,9 +6,10 @@ import { ScannerModule } from '../scanner/scanner.module';
 import { CleanupScheduler } from './cleanup.scheduler';
 import { PositionMonitorScheduler } from './position-monitor.scheduler';
 import { PositionMonitorService } from './position-monitor.service';
+import { UserDataStreamService } from './user-data-stream.service';
 
 @Module({
   imports: [BinanceModule, ExecutionModule, LogsModule, ScannerModule],
-  providers: [PositionMonitorService, PositionMonitorScheduler, CleanupScheduler],
+  providers: [PositionMonitorService, PositionMonitorScheduler, CleanupScheduler, UserDataStreamService],
 })
 export class PositionMonitorModule {}

@@ -226,7 +226,11 @@ export class PositionMonitorService implements OnModuleInit {
       const fillPrice = Number(closeResult.avgPrice);
       const exitPrice = fillPrice > 0 ? fillPrice : await this.binanceService.fetchMarkPrice(trade.symbol);
       const dirMult = trade.direction === 'LONG' ? 1 : -1;
-      const pnl = (exitPrice - trade.entryPrice) * trade.quantity * dirMult;
+      // Prefer Binance's own income ledger (includes commission + funding paid
+      // during the hold) over a raw price-diff calc, which silently drops both.
+      const openedAtMs = trade.openedAt ? trade.openedAt.getTime() : trade.createdAt.getTime();
+      const netPnl = await this.binanceService.fetchRealizedPnl(trade.symbol, openedAtMs).catch(() => null);
+      const pnl = netPnl ?? (exitPrice - trade.entryPrice) * trade.quantity * dirMult;
       const pnlPercent = trade.margin === 0 ? 0 : (pnl / trade.margin) * 100;
 
       const updated = await this.prisma.trade.updateMany({
@@ -272,7 +276,12 @@ export class PositionMonitorService implements OnModuleInit {
     }
   }
 
-  private async finalizeExchangeClosedTrade(trade: Trade): Promise<void> {
+  // Public: also called by UserDataStreamService the instant a bracket exit
+  // order fills, instead of waiting for the next 5s poll tick to notice the
+  // position disappeared from Binance. The status: 'live_open' guard in the
+  // updateMany below makes this safe to call twice for the same trade (e.g.
+  // if the WS event and the poll both fire) — the second call is a no-op.
+  async finalizeExchangeClosedTrade(trade: Trade): Promise<void> {
     try {
       const openedAtMs = trade.openedAt ? trade.openedAt.getTime() : trade.createdAt.getTime();
       const realizedPnl = await this.binanceService.fetchRealizedPnl(trade.symbol, openedAtMs).catch(() => null);

@@ -222,6 +222,7 @@ model Trade {
   openedAt   DateTime?
   closedAt   DateTime?
   createdAt  DateTime    @default(now())
+  archivedAt DateTime?
   signal     Signal?     @relation(fields: [signalId], references: [id])
   orders     Order[]
 
@@ -229,6 +230,7 @@ model Trade {
   @@index([createdAt])
   @@index([signalId])
   @@index([symbol])
+  @@index([archivedAt])
 }
 
 model Order {

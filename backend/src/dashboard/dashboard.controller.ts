@@ -5,6 +5,7 @@ import { ScannerService } from '../scanner/scanner.service';
 import { LogsService } from '../logs/logs.service';
 import { MarketRegimeService } from '../market-regime/market-regime.service';
 import { BinanceService } from '../binance/binance.service';
+import { BinanceApiError } from '../common/errors/binance.error';
 import { UpdateSettingsDto } from './dto/update-settings.dto';
 
 type SnapshotRow = {
@@ -307,26 +308,41 @@ export class DashboardController {
 
   @Post('/bot/start')
   async startBot(@Req() request: Request) {
+    const bannedUntilMs = this.binanceService.getBannedUntilMs();
+    if (bannedUntilMs > Date.now()) {
+      throw new BadRequestException(
+        `Binance has rate-limited/banned this server's IP until ${new Date(bannedUntilMs).toISOString()}. ` +
+          'Starting now would only extend the ban — wait until then and try again.',
+      );
+    }
+
     const actor = getActor(request);
     const settings = await this.getSettings();
     await this.prisma.botSettings.update({ where: { id: settings.id }, data: { isPaused: false } });
     await this.scannerService.clearScannerLock();
 
-    const sync = await this.scannerService.syncSymbols();
-    const scan = await this.scannerService.runScan();
+    try {
+      const sync = await this.scannerService.syncSymbols();
+      const scan = await this.scannerService.runScan();
 
-    await this.logsService.audit('bot.started', actor, {
-      syncImported: sync.imported,
-      scanProcessed: scan.processed,
-      scanSignalsCreated: scan.signalsCreated,
-      scanSkipped: scan.skipped ?? false,
-    });
+      await this.logsService.audit('bot.started', actor, {
+        syncImported: sync.imported,
+        scanProcessed: scan.processed,
+        scanSignalsCreated: scan.signalsCreated,
+        scanSkipped: scan.skipped ?? false,
+      });
 
-    return {
-      message: `Bot started. Synced ${sync.imported} symbols and processed ${scan.processed} symbols.`,
-      sync,
-      scan,
-    };
+      return {
+        message: `Bot started. Synced ${sync.imported} symbols and processed ${scan.processed} symbols.`,
+        sync,
+        scan,
+      };
+    } catch (err) {
+      if (err instanceof BinanceApiError) {
+        throw new BadRequestException(`Could not start bot — Binance error: ${err.message}`);
+      }
+      throw err;
+    }
   }
 
   @Post('/bot/reconcile-trades')
@@ -862,8 +878,6 @@ function normalizeSettingsUpdate(body: UpdateSettingsDto): UpdateSettingsDto {
   delete (normalized as UpdateSettingsDto & { weekendMinHotScoreForScan?: number }).weekendMinHotScoreForScan;
   delete (normalized as UpdateSettingsDto & { weekendRiskPerTradePercent?: number }).weekendRiskPerTradePercent;
   delete (normalized as UpdateSettingsDto & { weekendMaxPositionUsd?: number }).weekendMaxPositionUsd;
-  delete (normalized as UpdateSettingsDto & { maxLongOpenTrades?: number }).maxLongOpenTrades;
-  delete (normalized as UpdateSettingsDto & { maxShortOpenTrades?: number }).maxShortOpenTrades;
 
   if (body.enableRealTrading !== undefined) {
     normalized.realTradingEnabled = body.enableRealTrading;
@@ -887,8 +901,6 @@ function serializeSettings<T extends { realTradingEnabled: boolean; requireDashb
     weekendMinHotScoreForScan: _weekendMinHotScoreForScan,
     weekendRiskPerTradePercent: _weekendRiskPerTradePercent,
     weekendMaxPositionUsd: _weekendMaxPositionUsd,
-    maxLongOpenTrades: _maxLongOpenTrades,
-    maxShortOpenTrades: _maxShortOpenTrades,
     ...rest
   } = settings as T & {
     isPaused?: boolean;
@@ -898,8 +910,6 @@ function serializeSettings<T extends { realTradingEnabled: boolean; requireDashb
     weekendMinHotScoreForScan?: number;
     weekendRiskPerTradePercent?: number;
     weekendMaxPositionUsd?: number;
-    maxLongOpenTrades?: number;
-    maxShortOpenTrades?: number;
   };
   return {
     ...rest,

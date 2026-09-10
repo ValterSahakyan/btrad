@@ -14,6 +14,7 @@ type SettingsState = {
   defaultLeverage: number;
   maxLeverage: number;
   riskPerTradePercent: number;
+  maxDailyLossPercent: number;
   maxOpenTrades: number;
   maxHoldingHours: number;
   minPositionUsd: number;
@@ -71,6 +72,8 @@ type SettingsState = {
   trendReclaimMaxOpenTrades: number;
   rangeBounceMaxOpenTrades: number;
   maxConsecutiveLosses: number;
+  maxLongOpenTrades: number;
+  maxShortOpenTrades: number;
   fixedRoeEnabled: boolean;
   fixedRoeTpPercent: number;
   fixedRoeSlPercent: number;
@@ -96,8 +99,11 @@ const SECTIONS: Section[] = [
       { key: 'defaultLeverage',       label: 'Default Leverage', unit: 'x' },
       { key: 'maxLeverage',           label: 'Max Leverage',     unit: 'x' },
       { key: 'riskPerTradePercent',   label: 'Risk / Trade',     unit: '%' },
+      { key: 'maxDailyLossPercent',   label: 'Daily Loss Limit', unit: '%', min: 0 },
       { key: 'maxOpenTrades',           label: 'Max Open Trades' },
       { key: 'maxConsecutiveLosses',   label: 'Max Consecutive Losses', unit: 'per strategy/day' },
+      { key: 'maxLongOpenTrades',      label: 'Max LONG Open Trades', unit: '0=unlimited', min: 0 },
+      { key: 'maxShortOpenTrades',     label: 'Max SHORT Open Trades', unit: '0=unlimited', min: 0 },
       { key: 'maxHoldingHours',         label: 'Max Holding',      unit: 'hours (0=off)' },
       { key: 'maxPositionUsd',        label: 'Max Position',     unit: 'USD' },
       { key: 'minPositionUsd',        label: 'Min Position',     unit: 'USD' },
@@ -223,8 +229,11 @@ export function SettingsForm({ settings }: { settings: any }) {
     defaultLeverage: settings.defaultLeverage ?? 3,
     maxLeverage: settings.maxLeverage ?? 5,
     riskPerTradePercent: settings.riskPerTradePercent ?? 1,
+    maxDailyLossPercent: settings.maxDailyLossPercent ?? 3,
     maxOpenTrades: settings.maxOpenTrades ?? 2,
     maxConsecutiveLosses: settings.maxConsecutiveLosses ?? 5,
+    maxLongOpenTrades: settings.maxLongOpenTrades ?? 0,
+    maxShortOpenTrades: settings.maxShortOpenTrades ?? 0,
     maxHoldingHours: settings.maxHoldingHours ?? 0,
     maxPositionUsd: settings.maxPositionUsd ?? 3,
     minPositionUsd: settings.minPositionUsd ?? 1,

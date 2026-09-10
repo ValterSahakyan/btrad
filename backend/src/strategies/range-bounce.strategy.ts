@@ -51,11 +51,9 @@ export class RangeBounceStrategy implements TradingStrategy {
     const nearSupport = supportDistance <= atr14 * cfg.proximityAtr;
     const nearResistance = resistanceDistance <= atr14 * cfg.proximityAtr;
     const rangeWidthPct = support > 0 ? ((resistance - support) / support) * 100 : 0;
-    // Require a meaningful range (≥3%) and both levels tested at least twice.
-    // A 1% range gives no room for TP2 and is usually just noise in a trending move.
-    // Single-touch S/R is a guess — two or more touches confirm the level is real.
+    // Require a meaningful range (≥3%). A 1% range gives no room for TP2 and
+    // is usually just noise in a trending move.
     if (rangeWidthPct < 3) return null;
-    if (supportStrength < 2 && resistanceStrength < 2) return null;
 
     // Candlestick patterns — critical at S/R (Steve Nison: "patterns only matter at key levels")
     const patterns = detectCandlePatterns(candles15m);
@@ -70,6 +68,11 @@ export class RangeBounceStrategy implements TradingStrategy {
     // ── LONG: bounce off support ───────────────────────────────────────────────
     if (
       nearSupport &&
+      // Single-touch S/R is a guess — two or more touches confirm the level
+      // is real (John Murphy). This must check the side actually being
+      // traded, not "either level" — a 1-touch support is not validated
+      // just because resistance happens to have more touches.
+      supportStrength >= 2 &&
       current.low <= support * 1.003 &&
       current.close > current.open &&
       prev.close < prev.open &&
@@ -126,11 +129,11 @@ export class RangeBounceStrategy implements TradingStrategy {
     // ── SHORT: rejection from resistance ──────────────────────────────────────
     if (
       nearResistance &&
+      resistanceStrength >= 2 &&
       current.high >= resistance * 0.997 &&
       current.close < current.open &&
       prev.close > prev.open &&
       currentRsi >= cfg.rsiShortMin &&
-      context.marketRegime.regime !== 'bullish' &&
       coinTrend1h !== 'bullish'
     ) {
       const hasBearishRejection =
@@ -152,7 +155,11 @@ export class RangeBounceStrategy implements TradingStrategy {
       if (riskReward < context.minRiskReward) return null;
 
       const patternBonus = patterns.shootingStar ? 4 : patterns.pinBarBearish ? 3 : patterns.bearishEngulfing ? 5 : 2;
-      const strategyScore = Math.round(76 + patternBonus + resistanceStrengthBonus + sessionAdj);
+      // Countertrend penalty instead of a hard block — the resistance
+      // rejection + coin-level trend check above are already coin-specific,
+      // independent of the macro BTC/ETH regime.
+      const regimePenalty = context.marketRegime.regime === 'bullish' ? -6 : 0;
+      const strategyScore = Math.round(76 + patternBonus + resistanceStrengthBonus + sessionAdj + regimePenalty);
 
       return {
         symbol: context.symbol,

@@ -53,6 +53,24 @@ export class ScannerService {
   }
 
   async runScan(): Promise<{ processed: number; signalsCreated: number; skipped?: boolean }> {
+    // Centralized interval throttle — a full scan costs ~7 weight/symbol
+    // (~1400 for 200 symbols). runScan() has multiple callers (the scheduler,
+    // the manual "Run Scanner" button, PositionMonitorService's continuous-flow
+    // trigger); only the scheduler used to respect scannerIntervalSeconds via
+    // its own in-memory lastRunAt. The continuous-flow trigger fires every 5s
+    // from the position-monitor cron with no cooldown of its own, so whenever
+    // there were no queued signals it could re-launch a full scan the instant
+    // the previous one finished — many times a minute, blowing well past
+    // Binance's ~2400 weight/min IP cap and triggering a ban. Enforcing the
+    // interval here, once, protects every caller uniformly.
+    const settings = await this.prisma.botSettings.findFirst();
+    const intervalMs = (settings?.scannerIntervalSeconds ?? 60) * 1000;
+    const lastStartedRaw = await this.redis.get('scanner:last-started-at');
+    const lastStarted = lastStartedRaw ? Number(lastStartedRaw) : 0;
+    if (Date.now() - lastStarted < intervalMs) {
+      return { processed: 0, signalsCreated: 0, skipped: true };
+    }
+
     const lockToken = randomToken();
     const acquired = await this.redis.set('scanner:run-lock', lockToken, 'PX', 30 * 60_000, 'NX');
     if (!acquired) {
@@ -64,6 +82,7 @@ export class ScannerService {
       return { processed: 0, signalsCreated: 0, skipped: true };
     }
     this.scanning = true;
+    await this.redis.set('scanner:last-started-at', String(Date.now()), 'PX', 24 * 60 * 60_000);
     try {
       return await this._runScan();
     } finally {
@@ -109,7 +128,13 @@ export class ScannerService {
           exitPrice = trade.entryPrice;
         }
         const dirMult = trade.direction === 'LONG' ? 1 : -1;
-        const pnl = (exitPrice - trade.entryPrice) * trade.quantity * dirMult;
+        // The position already closed on Binance at some earlier, unknown point —
+        // mark price here is only a fallback proxy for exitPrice. Binance's income
+        // ledger has the trade's actual realized PnL (including commission and any
+        // funding paid), which is strictly more accurate than a current-price guess.
+        const openedAtMs = trade.openedAt ? trade.openedAt.getTime() : trade.createdAt.getTime();
+        const netPnl = await this.binanceService.fetchRealizedPnl(trade.symbol, openedAtMs).catch(() => null);
+        const pnl = netPnl ?? (exitPrice - trade.entryPrice) * trade.quantity * dirMult;
         const pnlPercent = trade.margin === 0 ? 0 : (pnl / trade.margin) * 100;
 
         await this.prisma.trade.update({
@@ -218,13 +243,25 @@ export class ScannerService {
     const createdDirectionCounts = new Map<string, number>();
     const strategyBlockedCounts = new Map<string, number>();
 
-    for (const { record: symbolRecord, ticker } of sorted) {
+    // Symbols are processed in bounded-concurrency batches rather than one at a
+    // time — sequential processing of ~200 symbols × 5 REST calls each was the
+    // actual scan-time bottleneck (measured ~75-90s per full sweep). Total
+    // Binance weight per scan is unchanged (~7/symbol); this only changes how
+    // fast that weight gets spent, well under the 2400/min per-IP cap even at
+    // this concurrency.
+    let scanAborted = false;
+
+    const processSymbol = async ({ record: symbolRecord, ticker }: (typeof sorted)[number]): Promise<void> => {
+      if (scanAborted) return;
       try {
-        // Re-check pause status frequently during the long loop to abort early
+        // Re-check pause status frequently to abort early
         const freshSettings = await this.prisma.botSettings.findFirst();
         if (freshSettings?.isPaused) {
-          await this.logsService.info('scanner', 'Scan aborted early: Bot was paused');
-          break;
+          if (!scanAborted) {
+            scanAborted = true;
+            await this.logsService.info('scanner', 'Scan aborted early: Bot was paused');
+          }
+          return;
         }
         const [candles15m, candles1h, candles4h, fundingRate, openInterest] = await Promise.all([
           this.binanceService.fetchKlines({ symbol: symbolRecord.symbol, interval: '15m', limit: 200 }),
@@ -234,7 +271,7 @@ export class ScannerService {
           this.binanceService.fetchOpenInterest(symbolRecord.symbol),
         ]);
 
-        if (candles15m.length < 60 || candles1h.length < 60) continue;
+        if (candles15m.length < 60 || candles1h.length < 60) return;
 
         const closes15m = candles15m.map((c) => c.close);
         const volumes15m = candles15m.map((c) => c.volume);
@@ -267,14 +304,14 @@ export class ScannerService {
 
         if (hotScore < minHotScore || spread > 0.8 || liquidity < 10) {
           filteredPreCandidate += 1;
-          continue;
+          return;
         }
 
         // Skip coins with insufficient volatility — fees exceed the expected move
         // Skip coins too volatile — stop distance becomes too wide for any R/R to work
         if (volatility < 0.15 || volatility > 5.0) {
           filteredPreCandidate += 1;
-          continue;
+          return;
         }
 
         const strategyConfig = buildStrategyConfig(settings);
@@ -293,7 +330,7 @@ export class ScannerService {
 
         if (candidates.length === 0) {
           noStrategyCandidate += 1;
-          continue;
+          return;
         }
         const selectableCandidates: Array<{
           candidate: (typeof candidates)[number];
@@ -329,12 +366,19 @@ export class ScannerService {
 
           hadUnblockedCandidate = true;
 
+          // riskScore is a placeholder here — validateSignal() hasn't run yet, and
+          // this value feeds its own confidence-scaled position sizing. Use 90, not
+          // an arbitrary lower number: any candidate that actually becomes a signal
+          // passes validateSignal with zero blocking messages, which always yields
+          // riskScore === 90 (risk-engine.service.ts). A lower placeholder here
+          // systematically undersizes every trade relative to the confidence score
+          // it's actually assigned moments later.
           const provisionalConfidence = this.confidenceScoreService.calculate({
             hotScore,
             strategyScore: candidate.strategyScore,
             marketScore: regime.score,
             liquidityScore: Math.max(20, 100 - spread * 100),
-            riskScore: 75,
+            riskScore: 90,
           });
 
           let effectiveStopLoss = candidate.stopLoss;
@@ -409,7 +453,7 @@ export class ScannerService {
           } else {
             noStrategyCandidate += 1;
           }
-          continue;
+          return;
         }
 
         selectableCandidates.sort((a, b) => b.selectionScore - a.selectionScore);
@@ -422,7 +466,7 @@ export class ScannerService {
         });
         if (existingTrade) {
           duplicateTradeSkipped += 1;
-          continue;
+          return;
         }
 
         // Skip if this symbol had a trade close recently — prevents chasing a move
@@ -436,7 +480,7 @@ export class ScannerService {
         });
         if (recentTrade) {
           cooldownSkipped += 1;
-          continue;
+          return;
         }
 
         // Skip if a signal for this symbol was already created or is in-flight.
@@ -457,7 +501,7 @@ export class ScannerService {
         });
         if (existingSignal) {
           duplicateSignalSkipped += 1;
-          continue;
+          return;
         }
 
         let stopLoss = candidate.stopLoss;
@@ -571,7 +615,9 @@ export class ScannerService {
           error: err instanceof Error ? err.message : String(err),
         });
       }
-    }
+    };
+
+    await mapWithConcurrency(sorted, SCAN_CONCURRENCY, processSymbol);
 
     const topBlockers = [...riskReasonCounts.entries()]
       .sort((a, b) => b[1] - a[1])
@@ -753,7 +799,7 @@ export class ScannerService {
 // extremely clear exhaustion signals.
 function effectiveMinConfidence(base: number, strategy: string): number {
   const delta: Record<string, number> = {
-    'exhaustion_reversal':   8,  // counter-trend: needs strong exhaustion evidence
+    'mean_reversion':        8,  // counter-trend: needs strong exhaustion evidence
     'range_bounce':          3,  // S/R rejection: needs confirmed multi-touch levels
     'pullback_continuation': 0,  // trend pullback: neutral baseline
     'breakout_volume':      -2,  // trend-following: most reliable structure
@@ -795,6 +841,24 @@ function getBotVersionTag(): string {
 // How long after a trade closes before the same symbol can be re-entered.
 // 30 min: prevents chasing while allowing frequent re-entry for high-frequency approach.
 const SYMBOL_COOLDOWN_MS = 30 * 60_000;
+
+// Symbols processed in parallel per scan. Each symbol costs ~7 Binance weight
+// (klines ×3 + funding + open interest); 200 symbols × 7 = ~1400 weight total
+// regardless of concurrency — this only controls how fast that weight is
+// spent, comfortably under the 2400/min per-IP cap at this level.
+const SCAN_CONCURRENCY = 10;
+
+async function mapWithConcurrency<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const item = items[cursor];
+      cursor += 1;
+      await fn(item);
+    }
+  });
+  await Promise.all(workers);
+}
 
 function randomToken(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;

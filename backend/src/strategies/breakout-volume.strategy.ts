@@ -78,8 +78,13 @@ export class BreakoutVolumeStrategy implements TradingStrategy {
 
       if (!hasBullishCandle) return null;
 
-      // SL: below breakout level or 1.5×ATR, whichever is tighter for risk
-      const stopLoss = Math.max(breakout.resistance * 0.995, currentPrice - 1.5 * atr14);
+      // SL: below breakout level or 1.5×ATR, whichever is WIDER. A stop pinned
+      // just under the just-broken resistance gets clipped by the ordinary
+      // throwback/retest that follows most real breakouts, before the move
+      // actually continues. Position sizing is risk-based (qty = riskAmount /
+      // stopDistance), so widening this costs no extra $ risk — it just sizes
+      // the position smaller and gives the trade room to survive a retest.
+      const stopLoss = Math.min(breakout.resistance * 0.995, currentPrice - 1.5 * atr14);
       const risk = currentPrice - stopLoss;
       if (risk <= 0 || risk / currentPrice > cfg.maxSlPercent / 100) return null;
 
@@ -140,7 +145,6 @@ export class BreakoutVolumeStrategy implements TradingStrategy {
       currentPrice < ema200 &&
       breakout.shortBreakout &&
       structure.breakOfStructure &&
-      context.marketRegime.regime !== 'bullish' &&
       context.marketRegime.regime !== 'no_trade' &&
       htf4Trend !== 'bullish'
     ) {
@@ -154,7 +158,10 @@ export class BreakoutVolumeStrategy implements TradingStrategy {
 
       if (!hasBearishCandle) return null;
 
-      const stopLoss = Math.min(breakout.support * 1.005, currentPrice + 1.5 * atr14);
+      // Mirror of the LONG fix: pick the WIDER stop so a normal post-breakdown
+      // throwback (price pops back up to retest broken support) doesn't clip
+      // the trade before the move continues.
+      const stopLoss = Math.max(breakout.support * 1.005, currentPrice + 1.5 * atr14);
       const risk = stopLoss - currentPrice;
       if (risk <= 0 || risk / currentPrice > cfg.maxSlPercent / 100) return null;
 
@@ -168,7 +175,11 @@ export class BreakoutVolumeStrategy implements TradingStrategy {
       const htfBonus = htf4Trend === 'bearish' ? 4 : 0;
       const bosBonus = structure.breakOfStructure ? 3 : 0;
       const patternBonus = patterns.bearishEngulfing || patterns.bearishMarubozu ? 4 : 2;
-      const strategyScore = Math.round(72 + volumeBonus + fvgBonus + htfBonus + bosBonus + patternBonus + sessionAdj);
+      // Countertrend penalty instead of a hard block — a clean structural
+      // breakdown on this coin can still be valid against a macro-bullish
+      // regime, just scored lower so regime-aligned candidates rank first.
+      const regimePenalty = context.marketRegime.regime === 'bullish' ? -6 : 0;
+      const strategyScore = Math.round(72 + volumeBonus + fvgBonus + htfBonus + bosBonus + patternBonus + sessionAdj + regimePenalty);
 
       const reasons = [
         `1h support broken (${breakout.support.toFixed(4)})`,

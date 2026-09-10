@@ -56,6 +56,13 @@ export class BinanceService {
   private cachedPositionMode: 'one-way' | 'hedge' | null = null;
   private positionModeCachedAt = 0;
 
+  // IP-level circuit breaker. Binance escalates ban duration for every request
+  // that arrives WHILE already banned/rate-limited — so the fix for a ban is to
+  // go completely silent until it lifts, not retry faster. Every request path
+  // (get() and signedRequest()) checks this before making a call; handleError()
+  // sets it the moment Binance reports a ban or a 429/418.
+  private bannedUntilMs = 0;
+
   constructor(
     private readonly configService: ConfigService,
     private readonly logsService: LogsService,
@@ -73,7 +80,18 @@ export class BinanceService {
     return settings?.mode === 'live' ? this.liveHttp : this.testnetHttp;
   }
 
+  // Throws locally, without touching the network, while an IP ban/rate-limit
+  // is active — every additional request during a ban makes Binance extend it.
+  private assertNotBanned(): void {
+    if (Date.now() < this.bannedUntilMs) {
+      throw new BinanceApiError(
+        `Binance IP rate-limit/ban in effect until ${new Date(this.bannedUntilMs).toISOString()} — request skipped locally to avoid extending it`,
+      );
+    }
+  }
+
   private async get<T>(url: string, params: Record<string, unknown> = {}): Promise<T> {
+    this.assertNotBanned();
     try {
       // Always use live Binance for market data — testnet has synthetic/fake volumes
       const { data } = await this.liveHttp.get<T>(url, { params });
@@ -88,6 +106,7 @@ export class BinanceService {
     url: string,
     params: Record<string, unknown> = {},
   ): Promise<T> {
+    this.assertNotBanned();
     const timestamp = Date.now();
     // Strip undefined values — Axios excludes them from the request, so the
     // signature must be computed over the same set of params Axios will actually send.
@@ -117,11 +136,35 @@ export class BinanceService {
   private handleError(error: unknown): BinanceApiError {
     const axiosError = error as AxiosError<{ code?: number; msg?: string }>;
     const message = axiosError.response?.data?.msg ?? axiosError.message;
+    const status = axiosError.response?.status;
+
+    // Binance embeds the exact unban timestamp (epoch ms) in the message for a
+    // hard IP ban (HTTP 418): "IP banned until 1787828214796". Trust it verbatim.
+    const banMatch = /banned until (\d+)/i.exec(message ?? '');
+    if (banMatch) {
+      this.bannedUntilMs = Math.max(this.bannedUntilMs, Number(banMatch[1]));
+    } else if (status === 429 || status === 418) {
+      // Soft rate-limit (429) or a ban without a parseable timestamp — honor
+      // Retry-After if Binance sent one, otherwise back off a safe default.
+      const retryAfterSec = Number(axiosError.response?.headers?.['retry-after']);
+      const backoffMs = Number.isFinite(retryAfterSec) && retryAfterSec > 0 ? retryAfterSec * 1000 : 60_000;
+      this.bannedUntilMs = Math.max(this.bannedUntilMs, Date.now() + backoffMs);
+    }
+
+    if (this.bannedUntilMs > Date.now()) {
+      void this.logsService.risk(
+        'binance_ip_banned',
+        `Binance rate-limited/banned this IP until ${new Date(this.bannedUntilMs).toISOString()} — pausing all Binance calls until then`,
+        'critical',
+        { status, message },
+      );
+    }
+
     void this.logsService.error('binance', message, {
-      status: axiosError.response?.status,
+      status,
       code: axiosError.response?.data?.code,
     });
-    return new BinanceApiError(message, axiosError.response?.data?.code, axiosError.response?.status);
+    return new BinanceApiError(message, axiosError.response?.data?.code, status);
   }
 
   async fetchExchangeInfo(): Promise<{ symbols: BinanceSymbolInfo[] }> {
@@ -212,8 +255,51 @@ export class BinanceService {
     return this.signedRequest('POST', '/fapi/v1/leverage', { symbol, leverage });
   }
 
+  // listenKey endpoints authenticate with the API-KEY header only — no
+  // HMAC signature — unlike every other private endpoint on this class.
+  async createListenKey(): Promise<string> {
+    const http = await this.getHttp();
+    const { data } = await http.post<{ listenKey: string }>('/fapi/v1/listenKey', null, {
+      headers: { 'X-MBX-APIKEY': this.apiKey },
+    });
+    return data.listenKey;
+  }
+
+  async keepAliveListenKey(): Promise<void> {
+    const http = await this.getHttp();
+    await http.put('/fapi/v1/listenKey', null, { headers: { 'X-MBX-APIKEY': this.apiKey } });
+  }
+
+  async closeListenKey(): Promise<void> {
+    const http = await this.getHttp();
+    await http.delete('/fapi/v1/listenKey', { headers: { 'X-MBX-APIKEY': this.apiKey } });
+  }
+
+  // Isolated margin caps a bad trade's downside to that position's own margin.
+  // Cross margin (Binance's per-symbol default) pools the ENTIRE account
+  // balance as collateral for every open position — the risk engine's
+  // riskPerTradePercent budget assumes losses are capped per-trade, which
+  // cross margin silently breaks. Binance returns code -4046 ("No need to
+  // change margin type") when a symbol is already isolated — treated as
+  // success, not an error.
+  async setIsolatedMargin(symbol: string): Promise<void> {
+    try {
+      await this.signedRequest('POST', '/fapi/v1/marginType', { symbol, marginType: 'ISOLATED' });
+    } catch (error) {
+      if (error instanceof BinanceApiError && Number(error.code) === -4046) return;
+      throw error;
+    }
+  }
+
   hasApiKeys(): boolean {
     return !!(this.apiKey && this.apiSecret);
+  }
+
+  // Epoch ms until which this IP is rate-limited/banned by Binance, or 0 if
+  // clear. Lets callers show a clean message up front instead of letting a
+  // doomed request throw a raw BinanceApiError.
+  getBannedUntilMs(): number {
+    return this.bannedUntilMs;
   }
 
   /**
@@ -316,13 +402,33 @@ export class BinanceService {
     return this.signedRequest('DELETE', '/fapi/v1/allOpenOrders', { symbol });
   }
 
+  // Sums ALL income types (REALIZED_PNL, COMMISSION, FUNDING_FEE, ...) for the
+  // symbol since startTime — this is the actual net effect on account balance,
+  // not just the raw price-close PnL. A REALIZED_PNL-only filter here would
+  // silently drop entry/exit commission and any funding paid during the hold,
+  // overstating every trade's true result (verified: a ~6h45m BSBUSDT hold on
+  // 2026-08-21 showed +$0.1906 realized PnL but -$0.0186 in commission +
+  // funding — 9.6% of the reported profit unaccounted for).
   async fetchRealizedPnl(symbol: string, startTime: number): Promise<number> {
-    const income = await this.signedRequest<BinanceIncome[]>('GET', '/fapi/v1/income', {
-      symbol,
-      incomeType: 'REALIZED_PNL',
-      startTime,
-      limit: 20,
-    });
-    return income.reduce((sum, entry) => sum + Number(entry.income), 0);
+    const fetchSum = async () => {
+      const income = await this.signedRequest<BinanceIncome[]>('GET', '/fapi/v1/income', {
+        symbol,
+        startTime,
+        limit: 200,
+      });
+      return income.reduce((sum, entry) => sum + Number(entry.income), 0);
+    };
+
+    const sum = await fetchSum();
+    if (sum !== 0) return sum;
+
+    // Some call sites query this within milliseconds of placing the closing
+    // order — Binance's income ledger isn't guaranteed to have indexed the
+    // fill's commission/PnL entries that fast. A commission-free, PnL-free
+    // close is implausible for a real executed trade, so a 0 here is more
+    // likely "not indexed yet" than "genuinely net zero" — retry once after
+    // a short delay before accepting it.
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    return fetchSum();
   }
 }

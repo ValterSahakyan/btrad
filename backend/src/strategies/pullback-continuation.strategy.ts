@@ -183,7 +183,6 @@ export class PullbackContinuationStrategy implements TradingStrategy {
       lastCandle.close <= prevCandle.close &&
       candleBodyRatio >= 0.5 &&
       volumeRatio >= 0.9 &&
-      context.marketRegime.regime !== 'bullish' &&
       context.marketRegime.regime !== 'no_trade' &&
       (patterns.pinBarBearish || patterns.shootingStar || patterns.bearishEngulfing || patterns.bearishMarubozu || candleBodyRatio >= 0.55)
     ) {
@@ -204,6 +203,10 @@ export class PullbackContinuationStrategy implements TradingStrategy {
       const twoLegBonus = twoLeggedPullbackShort ? 4 : 0;
       const patternBonus = patterns.bearishEngulfing ? 5 : patterns.pinBarBearish || patterns.shootingStar ? 3 : 0;
       const divergenceBonus = divergence.bearishDivergence ? 3 : 0;
+      // Countertrend penalty instead of a hard block — the 1h/4h bearish
+      // structure requirements above already confirm this coin, independent
+      // of the macro BTC/ETH regime.
+      const regimePenalty = context.marketRegime.regime === 'bullish' ? -6 : 0;
 
       return {
         symbol: context.symbol,
@@ -220,7 +223,7 @@ export class PullbackContinuationStrategy implements TradingStrategy {
           candleBodyRatio,
           rsi: 100 - currentRsi,
           pullbackDistanceAtr: pullbackDistance / atr14,
-          bonuses: obBonus + twoLegBonus + patternBonus + divergenceBonus + sessionAdj,
+          bonuses: obBonus + twoLegBonus + patternBonus + divergenceBonus + sessionAdj + regimePenalty,
         }),
         reasonList: [
           'Bearish 1h structure aligned below EMA20/EMA50',

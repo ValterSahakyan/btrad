@@ -20,7 +20,7 @@ export class TradesService {
     });
 
     const closedTradesQ = await this.prisma.trade.findMany({
-      where: { status: { not: 'live_open' } },
+      where: { status: { not: 'live_open' }, archivedAt: null },
       include: { signal: true, orders: true },
       orderBy: { closedAt: 'desc' },
     });
@@ -153,7 +153,11 @@ export class TradesService {
     }
 
     const dirMult = trade.direction === 'LONG' ? 1 : -1;
-    const pnl = (exitPrice - trade.entryPrice) * trade.quantity * dirMult;
+    // Prefer Binance's own income ledger (includes commission + funding paid
+    // during the hold) over a raw price-diff calc, which silently drops both.
+    const openedAtMs = trade.openedAt ? trade.openedAt.getTime() : trade.createdAt.getTime();
+    const netPnl = await this.binanceService.fetchRealizedPnl(trade.symbol, openedAtMs).catch(() => null);
+    const pnl = netPnl ?? (exitPrice - trade.entryPrice) * trade.quantity * dirMult;
     const pnlPercent = trade.margin === 0 ? 0 : (pnl / trade.margin) * 100;
 
     const updated = await this.prisma.trade.update({
@@ -194,29 +198,29 @@ export class TradesService {
     return updated;
   }
 
-  async clearClosed(): Promise<{ deletedCount: number; message: string }> {
+  // Archives (never hard-deletes) closed trades so they drop off the Trades
+  // list view but remain in the DB for /performance stats and CSV export.
+  // This table is the only record of live trading P&L — it must never be
+  // permanently destroyed by a "declutter the list" UI action.
+  async clearClosed(): Promise<{ archivedCount: number; message: string }> {
     const closedStatuses = [
       'live_closed', 'stopped',
       'take_profit', 'time_stop', 'manually_closed', 'failed',
     ] as const;
 
-    const rows = await this.prisma.trade.findMany({
-      where: { status: { in: [...closedStatuses] as never } },
-      select: { id: true },
+    const result = await this.prisma.trade.updateMany({
+      where: { status: { in: [...closedStatuses] as never }, archivedAt: null },
+      data: { archivedAt: new Date() },
     });
-    const ids = rows.map((r) => r.id);
-    if (ids.length === 0) return { deletedCount: 0, message: 'No closed trades to clear' };
 
-    // Orders must be deleted first — no cascade configured
-    await this.prisma.order.deleteMany({ where: { tradeId: { in: ids } } });
-    const result = await this.prisma.trade.deleteMany({ where: { id: { in: ids } } });
+    if (result.count === 0) return { archivedCount: 0, message: 'No closed trades to clear' };
 
-    await this.logsService.info('trades', 'Closed trades cleared', { count: result.count });
-    await this.logsService.audit('trade.clear_closed', 'system', { count: result.count });
+    await this.logsService.info('trades', 'Closed trades archived', { count: result.count });
+    await this.logsService.audit('trade.archive_closed', 'system', { count: result.count });
 
     return {
-      deletedCount: result.count,
-      message: `Cleared ${result.count} closed trade${result.count !== 1 ? 's' : ''}`,
+      archivedCount: result.count,
+      message: `Archived ${result.count} closed trade${result.count !== 1 ? 's' : ''}`,
     };
   }
 

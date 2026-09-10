@@ -151,6 +151,15 @@ export class OrderExecutionService {
       throw new BadRequestException('Bot was stopped before order placement');
     }
 
+    await this.binanceService.setIsolatedMargin(sym.symbol).catch(async (err) => {
+      // Non-fatal: fall back to whatever margin mode the symbol already has
+      // rather than blocking the trade, but log it — an unexpected failure
+      // here silently leaves a position on cross margin.
+      await this.logsService.warn('execution', `Failed to set isolated margin for ${sym.symbol} — proceeding on existing margin mode`, {
+        symbol: sym.symbol,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
     await this.binanceService.setLeverage(sym.symbol, signal.leverage);
 
     const side = signal.direction === 'LONG' ? 'BUY' : 'SELL';
@@ -316,7 +325,12 @@ export class OrderExecutionService {
       // Record actual PnL from the emergency close fill, if available
       const closePrice = closeResult ? (Number(closeResult.avgPrice) || fillPrice) : fillPrice;
       const dirMult = signal.direction === 'LONG' ? 1 : -1;
-      const emergencyPnl = (closePrice - fillPrice) * quantity * dirMult;
+      // Prefer Binance's own income ledger (includes entry + exit commission)
+      // over a raw price-diff calc, which silently drops both.
+      const netPnl = await this.binanceService
+        .fetchRealizedPnl(sym.symbol, trade.openedAt!.getTime())
+        .catch(() => null);
+      const emergencyPnl = netPnl ?? (closePrice - fillPrice) * quantity * dirMult;
       const emergencyPnlPct = actualMargin > 0 ? (emergencyPnl / actualMargin) * 100 : 0;
 
       await this.prisma.trade.update({

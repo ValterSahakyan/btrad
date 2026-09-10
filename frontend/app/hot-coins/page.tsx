@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { clientApiPath } from '@/lib/client-api';
 import { number } from '@/lib/utils';
 
@@ -43,6 +44,7 @@ export default function HotCoinsPage() {
   const [coins, setCoins] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [backendError, setBackendError] = useState<string | null>(null);
+  const router = useRouter();
 
   const fetchCoins = useCallback(async () => {
     try {
@@ -51,6 +53,10 @@ export default function HotCoinsPage() {
         cache: 'no-store',
       });
       if (!response.ok) {
+        if (response.status === 401) {
+          router.push('/login');
+          return;
+        }
         setBackendError(`Backend request failed (${response.status})`);
         return;
       }
@@ -61,7 +67,7 @@ export default function HotCoinsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     fetchCoins();

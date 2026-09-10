@@ -407,4 +407,14 @@ export class UpdateSettingsDto {
   @IsInt()
   @Min(0)
   rangeBounceMaxOpenTrades?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  maxLongOpenTrades?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  maxShortOpenTrades?: number;
 }

@@ -143,7 +143,6 @@ export class TrendReclaimStrategy implements TradingStrategy {
     if (
       htfTrend === 'bearish' &&
       strongBearTrend &&
-      context.marketRegime.regime !== 'bullish' &&
       context.marketRegime.regime !== 'no_trade' &&
       ema20 < ema20Prev &&
       trendStrengthAtr >= 0.22 &&
@@ -179,8 +178,11 @@ export class TrendReclaimStrategy implements TradingStrategy {
       const fvgBonus = inFvg ? 5 : 0;
       const patternBonus = patterns.bearishEngulfing || patterns.bearishMarubozu ? 4 : 2;
       const htfBonus = htf4Trend === 'bearish' ? 4 : 0;
+      // Countertrend penalty instead of a hard block — strongBearTrend + 1h/4h
+      // alignment above already confirm this coin independent of macro regime.
+      const regimePenalty = context.marketRegime.regime === 'bullish' ? -6 : 0;
 
-      const strategyScore = Math.round(79 + volumeBonus + obBonus + fvgBonus + patternBonus + htfBonus + sessionAdj);
+      const strategyScore = Math.round(79 + volumeBonus + obBonus + fvgBonus + patternBonus + htfBonus + sessionAdj + regimePenalty);
 
       return {
         symbol: context.symbol,

@@ -40,6 +40,13 @@ export class RiskEngineService {
     const usdtBalance =
       availableBalance > 0 ? availableBalance : (settings?.mode === 'live' ? 0 : 10_000);
 
+    // Total wallet balance (not free/available margin) — used as the daily-loss
+    // denominator so the circuit breaker doesn't fluctuate with margin lock-up
+    // from currently open positions.
+    const totalBalanceRaw = Number(usdtRow?.balance ?? 0);
+    const totalBalance =
+      totalBalanceRaw > 0 ? totalBalanceRaw : (settings?.mode === 'live' ? 0 : 10_000);
+
     const riskPerTradePercent = settings?.riskPerTradePercent ?? 1;
     const maxLeverage = settings?.maxLeverage ?? 5;
     const minRiskReward = settings?.minRiskReward ?? 1.5;
@@ -84,8 +91,23 @@ export class RiskEngineService {
       messages.push(`Max open trades reached (${openTradeCount}/${maxOpenTrades})`);
     }
 
+    // Directional exposure cap — independent of total open trades. Multiple
+    // same-direction positions across different symbols are still correlated
+    // to the same BTC move; a flat count doesn't catch that (0 = unlimited).
+    const maxLongOpenTrades = (settings as any)?.maxLongOpenTrades ?? 0;
+    const maxShortOpenTrades = (settings as any)?.maxShortOpenTrades ?? 0;
+    const directionCap = input.direction === 'LONG' ? maxLongOpenTrades : maxShortOpenTrades;
+    if (directionCap > 0) {
+      const sameDirectionCount = await this.prisma.trade.count({
+        where: { status: 'live_open', direction: input.direction },
+      });
+      if (sameDirectionCount >= directionCap) {
+        messages.push(`Max ${input.direction} open trades reached (${sameDirectionCount}/${directionCap})`);
+      }
+    }
+
     // Daily loss circuit breaker (Taleb: protect against ruin; never let a bad day spiral)
-    if (maxDailyLossPercent > 0 && usdtBalance > 0) {
+    if (maxDailyLossPercent > 0 && totalBalance > 0) {
       const todayStart = new Date();
       todayStart.setUTCHours(0, 0, 0, 0);
       const todayTrades = await this.prisma.trade.findMany({
@@ -93,7 +115,7 @@ export class RiskEngineService {
         select: { pnl: true },
       });
       const dailyPnl = todayTrades.reduce((sum, t) => sum + (t.pnl ?? 0), 0);
-      const dailyLossPct = (Math.abs(Math.min(0, dailyPnl)) / usdtBalance) * 100;
+      const dailyLossPct = (Math.abs(Math.min(0, dailyPnl)) / totalBalance) * 100;
       if (dailyLossPct >= maxDailyLossPercent) {
         messages.push(`Daily loss limit hit: -${dailyLossPct.toFixed(2)}% of ${maxDailyLossPercent}% allowed`);
       }

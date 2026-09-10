@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { DailyExportControls } from '@/components/actions/daily-export-controls';
 import { Badge } from '@/components/ui/badge';
 import { Pagination } from '@/components/ui/pagination';
@@ -85,11 +86,16 @@ export default function TradesPage() {
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<SortState>({ key: 'createdAt', direction: 'desc' });
   const { confirm, modal } = useConfirm();
+  const router = useRouter();
 
   const fetchTrades = useCallback(async () => {
     try {
       const res = await fetch(clientApiPath('/trades'), { credentials: 'include', cache: 'no-store' });
       if (!res.ok) {
+        if (res.status === 401) {
+          router.push('/login');
+          return;
+        }
         setBackendError(`Backend request failed (${res.status})`);
         return;
       }
@@ -101,7 +107,7 @@ export default function TradesPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     fetchTrades();
@@ -148,9 +154,9 @@ export default function TradesPage() {
     if (closedCount === 0) return;
     const ok = await confirm({
       title: 'Clear Closed Trades',
-      message: `Permanently delete ${closedCount} closed trade${closedCount !== 1 ? 's' : ''} (SL, TP, manually closed, failed)? Open live trades are kept. This cannot be undone.`,
+      message: `Hide ${closedCount} closed trade${closedCount !== 1 ? 's' : ''} (SL, TP, manually closed, failed) from this list? Open live trades are kept. They stay in Performance stats and CSV export — nothing is deleted.`,
       confirmLabel: 'Clear',
-      variant: 'danger',
+      variant: 'default',
     });
     if (!ok) return;
     setClearing(true);

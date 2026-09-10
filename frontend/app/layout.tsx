@@ -21,7 +21,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'BEE trad',
+  title: 'Bee Trading ',
   description: 'Algorithmic Binance USD-M Futures trading console',
   icons: { icon: '/icon.svg' },
 };
