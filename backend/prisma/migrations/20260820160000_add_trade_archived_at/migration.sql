@@ -3,6 +3,10 @@
 -- the fix for that data-loss path — closed trades are now hidden from the
 -- Trades list (archivedAt IS NULL filter) but retained for /performance and
 -- CSV export, which query Trade without an archivedAt filter.
-ALTER TABLE "Trade" ADD COLUMN "archivedAt" TIMESTAMP(3);
+-- IF NOT EXISTS on both statements: the CD deploy script deletes unfinished
+-- _prisma_migrations rows and does `git reset --hard` before every deploy, so a
+-- migration that half-applied on a failed deploy must be safe to re-run. Every
+-- other migration in this repo follows the same convention.
+ALTER TABLE "Trade" ADD COLUMN IF NOT EXISTS "archivedAt" TIMESTAMP(3);
 
-CREATE INDEX "Trade_archivedAt_idx" ON "Trade"("archivedAt");
+CREATE INDEX IF NOT EXISTS "Trade_archivedAt_idx" ON "Trade"("archivedAt");
