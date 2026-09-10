@@ -1,24 +1,14 @@
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
-import { Inter, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Topbar } from '@/components/layout/header';
 import { TradeVoiceNotifier } from '@/components/layout/trade-voice-notifier';
 
-const inter = Inter({
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '600', '700'],
-  variable: '--font-inter',
-  display: 'swap',
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500', '600'],
-  variable: '--font-mono',
-  display: 'swap',
-});
+// Fonts come from a system stack defined in globals.css (:root --font-inter /
+// --font-mono). next/font/google was removed because it fetches font files from
+// fonts.googleapis.com at BUILD time — that network call fails in restricted
+// build sandboxes and surfaces as "Export encountered an error on /_error: /404".
 
 export const metadata: Metadata = {
   title: 'Bee Trading ',
@@ -38,14 +28,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   if (isPublic) {
     return (
-      <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
+      <html lang="en">
         <body suppressHydrationWarning>{children}</body>
       </html>
     );
   }
 
   return (
-    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
+    <html lang="en">
       <body suppressHydrationWarning>
         <div className="app-shell">
           <Sidebar />
