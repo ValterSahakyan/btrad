@@ -33,8 +33,11 @@ async function bootstrap(): Promise<void> {
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
 
-  const port = process.env.APP_PORT ?? 3000;
-  await app.listen(port);
+  // PORT is what most hosts (Railway, Render, Fly, …) inject; APP_PORT is the
+  // project's own convention used by docker-compose. Bind 0.0.0.0 so the
+  // container is reachable from outside its own network namespace.
+  const port = process.env.PORT ?? process.env.APP_PORT ?? 3000;
+  await app.listen(port, '0.0.0.0');
   console.log(`Backend running on port ${port}`);
 }
 
