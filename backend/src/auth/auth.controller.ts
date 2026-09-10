@@ -53,39 +53,20 @@ export class AuthController {
 
 function getSessionCookieOptions(): { secure: boolean; domain?: string; path: string } {
   const secure = process.env.NODE_ENV === 'production';
+
+  // Host-only cookie by default (no Domain attribute). The browser only ever
+  // talks to the frontend origin — the frontend proxies to the backend
+  // server-side — so a host-scoped cookie is all that's needed, and it works
+  // everywhere: localhost, an IP, *.up.railway.app / *.onrender.com (where an
+  // explicit Domain is rejected as a public-suffix + 1), and a custom domain.
+  //
+  // Set AUTH_COOKIE_DOMAIN only for deliberate cross-subdomain sharing, e.g.
+  // frontend on app.example.com + backend on api.example.com sharing
+  // ".example.com". This project's proxy setup does not need that.
   const explicitDomain = process.env.AUTH_COOKIE_DOMAIN?.trim();
   if (explicitDomain) {
-    return {
-      secure,
-      domain: explicitDomain.replace(/^\./, ''),
-      path: '/',
-    };
+    return { secure, domain: explicitDomain.replace(/^\./, ''), path: '/' };
   }
 
-  const frontendUrl = process.env.FRONTEND_URL?.split(',')[0]?.trim();
-  if (!frontendUrl) {
-    return { secure, path: '/' };
-  }
-
-  try {
-    const hostname = new URL(frontendUrl).hostname;
-    if (isLocalHost(hostname) || isIpv4(hostname)) {
-      return { secure, path: '/' };
-    }
-    return {
-      secure,
-      domain: hostname,
-      path: '/',
-    };
-  } catch {
-    return { secure, path: '/' };
-  }
-}
-
-function isLocalHost(hostname: string): boolean {
-  return hostname === 'localhost' || hostname.endsWith('.localhost');
-}
-
-function isIpv4(hostname: string): boolean {
-  return /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname);
+  return { secure, path: '/' };
 }

@@ -3,23 +3,14 @@ import { redirect } from 'next/navigation';
 
 export async function GET() {
   const store = await cookies();
-  const domain = process.env.AUTH_COOKIE_DOMAIN?.trim() || deriveCookieDomain(process.env.FRONTEND_URL);
+  // Must mirror how the backend sets the cookie (auth.controller.ts): host-only
+  // unless AUTH_COOKIE_DOMAIN is explicitly configured. A delete with a Domain
+  // that doesn't match how the cookie was set is a no-op.
+  const domain = process.env.AUTH_COOKIE_DOMAIN?.trim();
   store.delete({
     name: 'perpscout_session',
     path: '/',
-    ...(domain ? { domain } : {}),
+    ...(domain ? { domain: domain.replace(/^\./, '') } : {}),
   });
   redirect('/login');
-}
-
-function deriveCookieDomain(frontendUrl?: string): string | undefined {
-  if (!frontendUrl) return undefined;
-  try {
-    const hostname = new URL(frontendUrl.split(',')[0].trim()).hostname;
-    if (hostname === 'localhost' || hostname.endsWith('.localhost')) return undefined;
-    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)) return undefined;
-    return hostname;
-  } catch {
-    return undefined;
-  }
 }
