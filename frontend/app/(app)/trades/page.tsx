@@ -9,7 +9,13 @@ import { clientApiPath } from '@/lib/client-api';
 import { cn, currency, number } from '@/lib/utils';
 
 const API = '/api/backend';
-const REFRESH_MS = 10_000;
+// Trades page renders live mark price / PnL straight from Binance on every
+// poll (TradesService.list() calls fetchOpenPositions() fresh each time, no
+// server-side cache) — the position monitor cron already ticks every 5s
+// server-side, so polling faster than that on the client just wastes
+// requests. 4s keeps PnL feeling live without exceeding what the backend
+// itself can produce fresher data for.
+const REFRESH_MS = 4_000;
 const PAGE_SIZE = 100;
 type SortKey =
   | 'createdAt'

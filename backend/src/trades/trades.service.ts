@@ -98,10 +98,12 @@ export class TradesService {
     if (!trade) throw new NotFoundException('Trade not found');
     if (trade.status !== 'live_open') throw new NotFoundException('Trade is not open');
 
-    // Cancel only the SL/TP orders that belong to this trade
+    // Cancel only the SL/TP orders that belong to this trade. Run them
+    // concurrently — these are independent cancel calls (typically SL + TP),
+    // so serializing them was pure added latency on every manual close.
     const openOrders = trade.orders.filter((o) => o.status === 'open' && o.binanceOrderId);
-    for (const order of openOrders) {
-      await this.binanceService.cancelOrder(trade.symbol, order.binanceOrderId!)
+    await Promise.all(openOrders.map((order) =>
+      this.binanceService.cancelOrder(trade.symbol, order.binanceOrderId!)
         .catch(() => this.binanceService.cancelAlgoOrder(order.binanceOrderId!))
         .catch(async (err) => {
           await this.logsService.warn('trades', `Failed to cancel order ${order.binanceOrderId}`, {
@@ -110,8 +112,8 @@ export class TradesService {
             orderType: order.type,
             error: err instanceof Error ? err.message : String(err),
           });
-        });
-    }
+        })
+    ));
 
     await this.prisma.order.updateMany({
       where: { tradeId: id, status: 'open' },
@@ -153,11 +155,15 @@ export class TradesService {
     }
 
     const dirMult = trade.direction === 'LONG' ? 1 : -1;
-    // Prefer Binance's own income ledger (includes commission + funding paid
-    // during the hold) over a raw price-diff calc, which silently drops both.
-    const openedAtMs = trade.openedAt ? trade.openedAt.getTime() : trade.createdAt.getTime();
-    const netPnl = await this.binanceService.fetchRealizedPnl(trade.symbol, openedAtMs).catch(() => null);
-    const pnl = netPnl ?? (exitPrice - trade.entryPrice) * trade.quantity * dirMult;
+    // Close the trade immediately using a fast price-diff estimate. The exact
+    // net PnL (Binance's income ledger, including commission + funding) needs
+    // a network round trip and, if the ledger hasn't indexed the fill yet, an
+    // internal ~1.2s retry sleep (see fetchRealizedPnl) — that used to block
+    // this entire request, making every manual close feel sluggish. The
+    // trade is already fully closed on the exchange by this point, so there's
+    // no reason to make the caller wait on the ledger too; reconcile it in
+    // the background instead and correct the row once it resolves.
+    const pnl = (exitPrice - trade.entryPrice) * trade.quantity * dirMult;
     const pnlPercent = trade.margin === 0 ? 0 : (pnl / trade.margin) * 100;
 
     const updated = await this.prisma.trade.update({
@@ -194,6 +200,21 @@ export class TradesService {
       pnl,
     });
     await this.logsService.audit('trade.close_live', actor, { tradeId: id, symbol: trade.symbol });
+
+    const openedAtMs = trade.openedAt ? trade.openedAt.getTime() : trade.createdAt.getTime();
+    void this.binanceService.fetchRealizedPnl(trade.symbol, openedAtMs)
+      .then((netPnl) => {
+        const netPnlPercent = trade.margin === 0 ? 0 : (netPnl / trade.margin) * 100;
+        return this.prisma.trade.update({
+          where: { id },
+          data: { pnl: Number(netPnl.toFixed(4)), pnlPercent: Number(netPnlPercent.toFixed(2)) },
+        });
+      })
+      .catch((err) => this.logsService.warn('trades', `Realized PnL reconciliation failed for trade ${id}, keeping price-diff estimate`, {
+        tradeId: id,
+        symbol: trade.symbol,
+        error: err instanceof Error ? err.message : String(err),
+      }));
 
     return updated;
   }
