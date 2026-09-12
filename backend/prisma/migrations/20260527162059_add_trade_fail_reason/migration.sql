@@ -1,0 +1,11 @@
+-- Add Trade.failReason. This field was added to schema.prisma in commit
+-- e88b3ca (2026-05-27) but no migration was ever generated for it — the dev
+-- database presumably picked it up via `prisma db push` at the time, which
+-- alters the DB directly without writing a migration file. `prisma migrate
+-- deploy` on any other database (a fresh one, or one that only ever ran
+-- committed migrations) never got this column, causing:
+--   P2022: The column `Trade.failReason` does not exist in the current database.
+--
+-- IF NOT EXISTS: safe to re-run on a database that already has the column
+-- from the db-push path.
+ALTER TABLE "Trade" ADD COLUMN IF NOT EXISTS "failReason" TEXT;
