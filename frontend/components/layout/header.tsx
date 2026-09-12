@@ -32,7 +32,7 @@ function Pill({ label, tone }: { label: string; tone: 'pos' | 'neg' | 'warn' | '
 }
 
 const pageTitle: Record<string, string> = {
-  '/overview': 'Overview',
+  '/overview': 'Overviewww',
   '/hot-coins': 'Scanner',
   '/signals': 'Signals',
   '/trades': 'Trades',
