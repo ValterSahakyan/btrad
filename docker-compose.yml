@@ -43,8 +43,12 @@ services:
       APP_PORT: 3000
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/perpscout
       REDIS_URL: redis://redis:6379
-      AUTH_COOKIE_DOMAIN: yogurtsoftware.info
-      FRONTEND_URL: https://yogurtsoftware.info
+      # Empty by default = host-only session cookie, which is correct for a
+      # single-domain deployment (frontend proxies to backend server-side, the
+      # browser never talks to the backend directly). Only set this in .env
+      # for a deliberate cross-subdomain setup.
+      AUTH_COOKIE_DOMAIN: ${AUTH_COOKIE_DOMAIN:-}
+      FRONTEND_URL: ${FRONTEND_URL:-https://yogurtsoftware.info}
     ports:
       - "127.0.0.1:13000:3000"
     depends_on:
@@ -66,15 +70,15 @@ services:
       context: .
       dockerfile: frontend/Dockerfile
       args:
-        NEXT_PUBLIC_API_BASE_URL: https://api.yogurtsoftware.info/api
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-https://api.yogurtsoftware.info/api}
     env_file:
       - .env
     environment:
       NODE_ENV: production
-      NEXT_PUBLIC_API_BASE_URL: https://api.yogurtsoftware.info/api
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-https://api.yogurtsoftware.info/api}
       API_BASE_URL: http://backend:3000/api
-      AUTH_COOKIE_DOMAIN: yogurtsoftware.info
-      FRONTEND_URL: https://yogurtsoftware.info
+      AUTH_COOKIE_DOMAIN: ${AUTH_COOKIE_DOMAIN:-}
+      FRONTEND_URL: ${FRONTEND_URL:-https://yogurtsoftware.info}
       NEXT_PUBLIC_AUTH_REQUIRED: "true"
     ports:
       - "127.0.0.1:13001:3001"
